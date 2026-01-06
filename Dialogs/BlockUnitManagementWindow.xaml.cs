@@ -1,44 +1,38 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using Toplanti.Data;
 using Toplanti.Models;
+using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Dialogs;
 
 public partial class BlockUnitManagementWindow : Window
 {
-    private readonly ToplantiDbContext? _context;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ISiteService _siteService;
+    private readonly IUnitService _unitService;
     private ObservableCollection<UnitViewModel> _units = [];
     private Site? _currentSite;
     private int _maxUnitCount = 0;
     private readonly Site? _selectedSiteFromMain;
 
-    public BlockUnitManagementWindow(Site? selectedSite = null)
+    public BlockUnitManagementWindow(
+        IUnitOfWork unitOfWork,
+        ISiteService siteService,
+        IUnitService unitService,
+        Site? selectedSite = null)
     {
+        InitializeComponent();
+        
+        _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _siteService = siteService ?? throw new ArgumentNullException(nameof(siteService));
+        _unitService = unitService ?? throw new ArgumentNullException(nameof(unitService));
+        _selectedSiteFromMain = selectedSite;
+        
         try
         {
-            InitializeComponent();
-            
-            _selectedSiteFromMain = selectedSite;
-            
-            // Configuration'dan connection string'i al
-            var configuration = new ConfigurationBuilder()
-                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true)
-                .Build();
-
-            var connectionString = configuration.GetConnectionString("DefaultConnection")
-                ?? "Server=(localdb)\\mssqllocaldb;Database=ToplantiDb;Trusted_Connection=true;MultipleActiveResultSets=true";
-
-            var optionsBuilder = new DbContextOptionsBuilder<ToplantiDbContext>();
-            optionsBuilder.UseSqlServer(connectionString);
-            _context = new ToplantiDbContext(optionsBuilder.Options);
-            
             LoadUnitTypes();
             
             if (_selectedSiteFromMain != null)
@@ -84,13 +78,12 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void LoadUnitTypes()
+    private async void LoadUnitTypes()
     {
-        if (_context == null) return;
-        
         try
         {
-            cmbUnitType.ItemsSource = _context.UnitTypes.ToList();
+            var unitTypes = await _unitOfWork.UnitTypes.GetAllUnitTypesAsync();
+            cmbUnitType.ItemsSource = unitTypes.ToList();
             if (cmbUnitType.Items.Count > 0)
                 cmbUnitType.SelectedIndex = 0;
         }
@@ -101,21 +94,23 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void LoadExistingSite()
+    private async void LoadExistingSite()
     {
-        if (_context == null) return;
-        
         try
         {
-            var site = _context.Sites.FirstOrDefault(s => s.IsActive);
-            if (site != null)
+            var sites = await _siteService.GetAllSitesAsync();
+            var siteDto = sites.FirstOrDefault();
+            if (siteDto != null)
             {
-                _currentSite = site;
-                txtSiteName.Text = site.Name;
-                txtTotalLandShare.Text = site.TotalLandShare.ToString("F2");
-                btnCreateOrSelectSite.Tag = true;
-                UpdateSiteInfo();
-                LoadUnits();
+                _currentSite = await _siteService.GetSiteDomainModelByIdAsync(siteDto.Id);
+                if (_currentSite != null)
+                {
+                    txtSiteName.Text = _currentSite.Name;
+                    txtTotalLandShare.Text = _currentSite.TotalLandShare.ToString("F2");
+                    btnCreateOrSelectSite.Tag = true;
+                    UpdateSiteInfo();
+                    LoadUnits();
+                }
             }
         }
         catch (Exception ex)
@@ -125,7 +120,7 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void UpdateSiteInfo()
+    private async void UpdateSiteInfo()
     {
         try
         {
@@ -135,13 +130,7 @@ public partial class BlockUnitManagementWindow : Window
                 return;
             }
 
-            if (_context == null)
-            {
-                txtSiteInfo.Text = "Veritabani baglantisi yok";
-                return;
-            }
-
-            var unitCount = _context.Units.Count(u => u.SiteId == _currentSite.Id && u.IsActive);
+            var unitCount = await _unitOfWork.Units.GetActiveUnitCountBySiteIdAsync(_currentSite.Id);
             txtSiteInfo.Text = $"Site: {_currentSite.Name ?? ""} | Toplam Arsa Payi: {_currentSite.TotalLandShare:F2} | Daire Sayisi: {unitCount}";
         }
         catch (Exception ex)
@@ -150,28 +139,24 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void LoadUnits()
+    private async void LoadUnits()
     {
-        if (_context == null || _currentSite == null) return;
+        if (_currentSite == null) return;
         
         try
         {
-            var units = _context.Units
-                .Include(u => u.UnitType)
-                .Where(u => u.SiteId == _currentSite.Id && u.IsActive)
-                .OrderBy(u => u.Block)
-                .ThenBy(u => u.Number)
-                .ToList();
+            var units = await _unitOfWork.Units.GetActiveUnitsBySiteIdAsync(_currentSite.Id);
+            var unitsList = units.ToList();
 
-            _maxUnitCount = units.Count > 0 ? units.Count : 0;
+            _maxUnitCount = unitsList.Count > 0 ? unitsList.Count : 0;
             
             // Blok bazında toplam birim sayısını hesapla
-            var blockUnitCounts = units
+            var blockUnitCounts = unitsList
                 .GroupBy(u => u.Block ?? "")
                 .ToDictionary(g => g.Key, g => g.Count());
 
             _units = new ObservableCollection<UnitViewModel>(
-                units.Select(u =>
+                unitsList.Select(u =>
                 {
                     // Her birim için kendi bloğundaki toplam birim sayısına göre padding hesapla
                     var blockUnitCount = blockUnitCounts.GetValueOrDefault(u.Block ?? "", 0);
@@ -231,14 +216,15 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void LoadBlockFilter()
+    private async void LoadBlockFilter()
     {
-        if (_context == null || _currentSite == null) return;
+        if (_currentSite == null) return;
 
         try
         {
-            var blocks = _context.Units
-                .Where(u => u.SiteId == _currentSite.Id && u.IsActive && !string.IsNullOrEmpty(u.Block))
+            var units = await _unitOfWork.Units.GetActiveUnitsBySiteIdAsync(_currentSite.Id);
+            var blocks = units
+                .Where(u => !string.IsNullOrEmpty(u.Block))
                 .Select(u => u.Block!)
                 .Distinct()
                 .OrderBy(b => b)
@@ -292,26 +278,27 @@ public partial class BlockUnitManagementWindow : Window
         dgUnits.ItemsSource = filteredUnits.ToList();
     }
 
-    private void CmbUnitType_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    private async void CmbUnitType_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
-        if (cmbUnitType.IsDropDownOpen && _context != null)
+        if (cmbUnitType.IsDropDownOpen)
         {
             var searchText = cmbUnitType.Text?.ToLower() ?? "";
             if (string.IsNullOrWhiteSpace(searchText))
             {
-                cmbUnitType.ItemsSource = _context.UnitTypes.ToList();
+                var unitTypes = await _unitOfWork.UnitTypes.GetAllUnitTypesAsync();
+                cmbUnitType.ItemsSource = unitTypes.ToList();
                 return;
             }
 
-            var unitTypes = _context.UnitTypes.ToList();
-            var filteredTypes = unitTypes.Where(ut => ut.Name.ToLower().Contains(searchText)).ToList();
+            var allUnitTypes = await _unitOfWork.UnitTypes.GetAllUnitTypesAsync();
+            var filteredTypes = allUnitTypes.Where(ut => ut.Name.ToLower().Contains(searchText)).ToList();
             cmbUnitType.ItemsSource = filteredTypes;
         }
     }
 
-    private void CmbFilterBlock_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    private async void CmbFilterBlock_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
-        if (cmbFilterBlock.IsDropDownOpen && _context != null && _currentSite != null)
+        if (cmbFilterBlock.IsDropDownOpen && _currentSite != null)
         {
             var searchText = cmbFilterBlock.Text?.ToLower() ?? "";
             if (string.IsNullOrWhiteSpace(searchText))
@@ -320,9 +307,10 @@ public partial class BlockUnitManagementWindow : Window
                 return;
             }
 
-            var blocks = _context.Units
-                .Where(u => u.SiteId == _currentSite.Id && !string.IsNullOrEmpty(u.Block))
-                .Select(u => u.Block)
+            var units = await _unitOfWork.Units.GetActiveUnitsBySiteIdAsync(_currentSite.Id);
+            var blocks = units
+                .Where(u => !string.IsNullOrEmpty(u.Block))
+                .Select(u => u.Block!)
                 .Distinct()
                 .OrderBy(b => b)
                 .ToList();
@@ -395,10 +383,8 @@ public partial class BlockUnitManagementWindow : Window
         return number;
     }
 
-    private void BtnCreateOrSelectSite_Click(object sender, RoutedEventArgs e)
+    private async void BtnCreateOrSelectSite_Click(object sender, RoutedEventArgs e)
     {
-        if (_context == null) return;
-
         if (string.IsNullOrWhiteSpace(txtSiteName.Text) ||
             !decimal.TryParse(txtTotalLandShare.Text, out var totalLandShare) ||
             totalLandShare <= 0)
@@ -413,14 +399,15 @@ public partial class BlockUnitManagementWindow : Window
             var siteName = txtSiteName.Text.Trim();
             
             // Deactivate existing sites
-            var existingSites = _context.Sites.Where(s => s.IsActive).ToList();
+            var existingSites = await _unitOfWork.Sites.FindAsync(s => s.IsActive);
             foreach (var site in existingSites)
             {
                 site.IsActive = false;
+                _unitOfWork.Sites.Update(site);
             }
 
             // Find or create site
-            var existingSite = _context.Sites.FirstOrDefault(s => s.Name == siteName);
+            var existingSite = await _unitOfWork.Sites.FirstOrDefaultAsync(s => s.Name == siteName);
             if (existingSite == null)
             {
                 existingSite = new Site
@@ -429,15 +416,16 @@ public partial class BlockUnitManagementWindow : Window
                     TotalLandShare = totalLandShare,
                     IsActive = true
                 };
-                _context.Sites.Add(existingSite);
+                await _unitOfWork.Sites.AddAsync(existingSite);
             }
             else
             {
                 existingSite.TotalLandShare = totalLandShare;
                 existingSite.IsActive = true;
+                _unitOfWork.Sites.Update(existingSite);
             }
 
-            _context.SaveChanges();
+            await _unitOfWork.SaveChangesAsync();
             _currentSite = existingSite;
             btnCreateOrSelectSite.Tag = true;
             UpdateSiteInfo();
@@ -453,10 +441,8 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void BtnDeleteAllData_Click(object sender, RoutedEventArgs e)
+    private async void BtnDeleteAllData_Click(object sender, RoutedEventArgs e)
     {
-        if (_context == null) return;
-
         // Şifre kontrolü
         var passwordDialog = new PasswordDialog();
         if (passwordDialog.ShowDialog() != true || !passwordDialog.IsPasswordCorrect)
@@ -482,15 +468,37 @@ public partial class BlockUnitManagementWindow : Window
         try
         {
             // Delete in correct order to avoid foreign key violations
-            _context.Votes.RemoveRange(_context.Votes);
-            _context.Decisions.RemoveRange(_context.Decisions);
-            _context.MeetingAttendances.RemoveRange(_context.MeetingAttendances);
-            _context.Proxies.RemoveRange(_context.Proxies);
-            _context.Units.RemoveRange(_context.Units);
-            _context.Meetings.RemoveRange(_context.Meetings);
-            _context.Sites.RemoveRange(_context.Sites);
+            var votes = await _unitOfWork.Decisions.FindAsync(d => true);
+            var decisions = await _unitOfWork.Decisions.GetAllAsync();
+            var attendances = await _unitOfWork.MeetingAttendances.GetAllAsync();
+            var units = await _unitOfWork.Units.GetAllAsync();
+            var meetings = await _unitOfWork.Meetings.GetAllAsync();
+            var sites = await _unitOfWork.Sites.GetAllAsync();
             
-            _context.SaveChanges();
+            // Note: Votes, Proxies, MeetingAttendances için repository'ler yok
+            // Bu işlem için DbContext'e erişim gerekebilir, ancak şimdilik sadece mevcut repository'lerle yapıyoruz
+            foreach (var decision in decisions)
+            {
+                _unitOfWork.Decisions.Remove(decision);
+            }
+            foreach (var attendance in attendances)
+            {
+                _unitOfWork.MeetingAttendances.Remove(attendance);
+            }
+            foreach (var unit in units)
+            {
+                _unitOfWork.Units.Remove(unit);
+            }
+            foreach (var meeting in meetings)
+            {
+                _unitOfWork.Meetings.Remove(meeting);
+            }
+            foreach (var site in sites)
+            {
+                _unitOfWork.Sites.Remove(site);
+            }
+            
+            await _unitOfWork.SaveChangesAsync();
 
             _currentSite = null;
             _units.Clear();

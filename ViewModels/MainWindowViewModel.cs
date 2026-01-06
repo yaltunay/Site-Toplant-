@@ -148,6 +148,7 @@ public class MainWindowViewModel : ViewModelBase
             {
                 OnSiteSelectionChanged();
             }
+        }
     }
     
     private async void LoadSiteDomainModelAsync(int siteId)
@@ -160,7 +161,6 @@ public class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             _notificationService.ShowError($"Site yukleme hatasi: {ex.Message}", "Hata", ex);
-        }
         }
     }
 

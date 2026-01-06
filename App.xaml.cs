@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using Toplanti.Data;
 using Toplanti.Infrastructure;
+using Toplanti.Infrastructure.Mappings;
 
 namespace Toplanti;
 
@@ -25,6 +26,9 @@ public partial class App : Application
         
         try
         {
+            // Configure Mapster mappings
+            MappingProfile.ConfigureMappings();
+
             // Build Configuration
             var configuration = BuildConfiguration();
 

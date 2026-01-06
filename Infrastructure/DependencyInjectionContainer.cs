@@ -32,7 +32,7 @@ public static class DependencyInjectionContainer
         // Connection string'i al
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' bulunamadı.");
-    {
+
         // Database Context
         services.AddDbContext<ToplantiDbContext>(options =>
             options.UseSqlServer(connectionString),
@@ -50,6 +50,7 @@ public static class DependencyInjectionContainer
         services.AddScoped<IAgendaItemRepository, AgendaItemRepository>();
         services.AddScoped<IDocumentRepository, DocumentRepository>();
         services.AddScoped<IMeetingAttendanceRepository, MeetingAttendanceRepository>();
+        services.AddScoped<IUnitTypeRepository, UnitTypeRepository>();
 
         // Core Services
         services.AddScoped<INotificationService, NotificationService>();
