@@ -1,12 +1,13 @@
 using Toplanti.Data;
 using Toplanti.Models;
+using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Services;
 
 /// <summary>
 /// Toplantı validasyon işlemlerini yöneten servis (SRP, DRY)
 /// </summary>
-public class MeetingValidationService
+public class MeetingValidationService : IMeetingValidationService
 {
     private readonly ToplantiDbContext _context;
 
@@ -85,23 +86,5 @@ public class MeetingValidationService
 
         return ValidationResult.Success();
     }
-}
-
-/// <summary>
-/// Validasyon sonucu modeli
-/// </summary>
-public class ValidationResult
-{
-    public bool IsValid { get; private set; }
-    public string? ErrorMessage { get; private set; }
-
-    private ValidationResult(bool isValid, string? errorMessage = null)
-    {
-        IsValid = isValid;
-        ErrorMessage = errorMessage;
-    }
-
-    public static ValidationResult Success() => new(true);
-    public static ValidationResult Failure(string errorMessage) => new(false, errorMessage);
 }
 

@@ -1,9 +1,24 @@
 using Toplanti.Models;
+using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Services;
 
 public class MeetingMinutesService
 {
+    private readonly IQuorumService _quorumService;
+    private readonly IProxyService _proxyService;
+    private readonly IVotingService _votingService;
+
+    public MeetingMinutesService(
+        IQuorumService quorumService,
+        IProxyService proxyService,
+        IVotingService votingService)
+    {
+        _quorumService = quorumService ?? throw new ArgumentNullException(nameof(quorumService));
+        _proxyService = proxyService ?? throw new ArgumentNullException(nameof(proxyService));
+        _votingService = votingService ?? throw new ArgumentNullException(nameof(votingService));
+    }
+
     public string GenerateMeetingMinutes(Meeting meeting, ICollection<Unit> allUnits, ICollection<Proxy> proxies)
     {
         var minutes = new System.Text.StringBuilder();
@@ -25,8 +40,7 @@ public class MeetingMinutesService
         minutes.AppendLine($"Katılan Arsa Payı: {meeting.AttendedLandShare:F2}");
         minutes.AppendLine();
         
-        var quorumService = new QuorumService();
-        var quorumNote = quorumService.GenerateQuorumNote(meeting.TotalSiteLandShare, meeting.AttendedLandShare);
+        var quorumNote = _quorumService.GenerateQuorumNote(meeting.TotalSiteLandShare, meeting.AttendedLandShare);
         minutes.AppendLine(quorumNote);
         minutes.AppendLine($"Yeter Sayı Durumu: {(meeting.QuorumAchieved ? "SAĞLANDI" : "SAĞLANAMADI")}");
         minutes.AppendLine();
@@ -34,8 +48,7 @@ public class MeetingMinutesService
         if (proxies.Any())
         {
             minutes.AppendLine("--- VEKALETLER (KMK 31) ---");
-            var proxyService = new ProxyService();
-            var maxProxies = proxyService.CalculateMaxProxyCount(meeting.TotalUnitCount);
+            var maxProxies = _proxyService.CalculateMaxProxyCount(meeting.TotalUnitCount);
             minutes.AppendLine($"Maksimum Vekalet Sayısı: {maxProxies}");
             minutes.AppendLine($"Kullanılan Vekalet Sayısı: {proxies.Count}");
             minutes.AppendLine();
@@ -53,7 +66,6 @@ public class MeetingMinutesService
         if (meeting.Decisions.Any())
         {
             minutes.AppendLine("--- KARARLAR ---");
-            var votingService = new VotingService();
             
             foreach (var decision in meeting.Decisions.OrderBy(d => d.CreatedAt))
             {

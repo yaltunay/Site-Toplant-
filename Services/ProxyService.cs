@@ -1,8 +1,9 @@
 using Toplanti.Models;
+using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Services;
 
-public class ProxyService
+public class ProxyService : IProxyService
 {
     public int CalculateMaxProxyCount(int totalUnitCount)
     {
