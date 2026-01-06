@@ -1,4 +1,5 @@
 using Toplanti.Models;
+using Toplanti.Models.DTOs;
 
 namespace Toplanti.Services.Interfaces;
 
@@ -7,13 +8,16 @@ namespace Toplanti.Services.Interfaces;
 /// </summary>
 public interface IMeetingService
 {
-    Task<Meeting> CreateMeetingAsync(string title, DateTime meetingDate, Site site);
+    Task<MeetingDto> CreateMeetingAsync(string title, DateTime meetingDate, Site site);
     Task<bool> CompleteMeetingAsync(int meetingId);
     Task<QuorumResult> CheckQuorumAsync(int meetingId);
     Task<string> GenerateMeetingMinutesAsync(int meetingId);
-    Task<IEnumerable<Meeting>> GetMeetingsBySiteIdAsync(int siteId);
-    Task<Meeting?> GetMeetingByIdAsync(int meetingId);
+    Task<IEnumerable<MeetingDto>> GetMeetingsBySiteIdAsync(int siteId);
+    Task<MeetingDto?> GetMeetingByIdAsync(int meetingId);
     Task<DashboardStats> GetDashboardStatsAsync(int siteId);
+    
+    // Domain model döndüren metodlar (iç işlemler için gerekli)
+    Task<Meeting?> GetMeetingDomainModelByIdAsync(int meetingId);
 }
 
 public class QuorumResult

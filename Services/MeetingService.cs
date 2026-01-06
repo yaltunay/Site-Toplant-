@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Toplanti.Data;
 using Toplanti.Data.Repositories;
+using Toplanti.Infrastructure.Mappings;
 using Toplanti.Models;
+using Toplanti.Models.DTOs;
 using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Services;
@@ -28,7 +30,7 @@ public class MeetingService : IMeetingService
         _votingService = votingService ?? throw new ArgumentNullException(nameof(votingService));
     }
 
-    public async Task<Meeting> CreateMeetingAsync(string title, DateTime meetingDate, Site site)
+    public async Task<MeetingDto> CreateMeetingAsync(string title, DateTime meetingDate, Site site)
     {
         var totalUnits = await _unitOfWork.Units.GetActiveUnitCountBySiteIdAsync(site.Id);
         var totalLandShare = site.TotalLandShare;
@@ -48,7 +50,9 @@ public class MeetingService : IMeetingService
         await _unitOfWork.Meetings.AddAsync(meeting);
         await _unitOfWork.SaveChangesAsync();
 
-        return meeting;
+        // Reload with details for mapping
+        var meetingWithDetails = await _unitOfWork.Meetings.GetMeetingWithDetailsAsync(meeting.Id);
+        return meetingWithDetails != null ? EntityMapper.ToDto(meetingWithDetails) : EntityMapper.ToDto(meeting);
     }
 
     public async Task<bool> CompleteMeetingAsync(int meetingId)
@@ -110,12 +114,19 @@ public class MeetingService : IMeetingService
         return minutesService.GenerateMeetingMinutes(meeting, allUnits.ToList(), proxies);
     }
 
-    public async Task<IEnumerable<Meeting>> GetMeetingsBySiteIdAsync(int siteId)
+    public async Task<IEnumerable<MeetingDto>> GetMeetingsBySiteIdAsync(int siteId)
     {
-        return await _unitOfWork.Meetings.GetMeetingsBySiteIdAsync(siteId);
+        var meetings = await _unitOfWork.Meetings.GetMeetingsBySiteIdAsync(siteId);
+        return EntityMapper.ToDto(meetings);
     }
 
-    public async Task<Meeting?> GetMeetingByIdAsync(int meetingId)
+    public async Task<MeetingDto?> GetMeetingByIdAsync(int meetingId)
+    {
+        var meeting = await _unitOfWork.Meetings.GetMeetingWithDetailsAsync(meetingId);
+        return meeting != null ? EntityMapper.ToDto(meeting) : null;
+    }
+
+    public async Task<Meeting?> GetMeetingDomainModelByIdAsync(int meetingId)
     {
         return await _unitOfWork.Meetings.GetMeetingWithDetailsAsync(meetingId);
     }

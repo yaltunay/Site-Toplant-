@@ -3,7 +3,9 @@ using System.Windows;
 using System.Windows.Input;
 using Toplanti.Data;
 using Toplanti.Dialogs;
+using Toplanti.Infrastructure.Mappings;
 using Toplanti.Models;
+using Toplanti.Models.DTOs;
 using Toplanti.Services.Interfaces;
 using Toplanti.ViewModels.Commands;
 
@@ -23,8 +25,10 @@ public class MainWindowViewModel : ViewModelBase
 
     // Properties
     private ObservableCollection<object> _sites = new();
-    private Site? _selectedSite;
-    private Meeting? _currentMeeting;
+    private SiteDto? _selectedSiteDto;
+    private Site? _selectedSite; // Domain model (CreateMeetingDialog için gerekli)
+    private MeetingDto? _currentMeetingDto;
+    private Meeting? _currentMeeting; // Domain model (validation ve işlemler için gerekli)
     private bool _isDashboardVisible = true;
     private bool _isDetailsVisible = false;
     private bool _isNoSiteVisible = true;
@@ -34,22 +38,23 @@ public class MainWindowViewModel : ViewModelBase
     private string _totalMeetings = "0";
     private string _totalDecisions = "0";
     private string _totalLandShare = "0.00";
-    private ObservableCollection<Meeting> _recentMeetings = new();
+    private ObservableCollection<MeetingDto> _recentMeetings = new();
     private ObservableCollection<object> _recentDecisions = new();
 
     // Units Tab
-    private ObservableCollection<Unit> _units = new();
+    private ObservableCollection<UnitDto> _units = new();
 
     // Meetings Tab
-    private ObservableCollection<Meeting> _meetings = new();
-    private ObservableCollection<Meeting> _meetingSelectionList = new();
-    private Meeting? _selectedMeeting;
+    private ObservableCollection<MeetingDto> _meetings = new();
+    private ObservableCollection<MeetingDto> _meetingSelectionList = new();
+    private MeetingDto? _selectedMeetingDto;
+    private Meeting? _selectedMeeting; // Domain model (işlemler için gerekli)
     private string _meetingStatus = "(Toplanti seciniz)";
     private string _meetingInfo = "Lütfen bir toplantı seçin.";
     private string _quorumInfo = "";
-    private ObservableCollection<AgendaItem> _agendaItems = new();
-    private ObservableCollection<Document> _documents = new();
-    private ObservableCollection<Decision> _votingItems = new();
+    private ObservableCollection<AgendaItemDto> _agendaItems = new();
+    private ObservableCollection<DocumentDto> _documents = new();
+    private ObservableCollection<DecisionDto> _votingItems = new();
     private string _agendaTitle = "";
     private string _documentTitle = "";
     private string _documentType = "Genel Kurul Icraat Raporu";
@@ -58,31 +63,31 @@ public class MainWindowViewModel : ViewModelBase
 
     // Decisions Tab
     private ObservableCollection<object> _decisions = new();
-    private ObservableCollection<Meeting> _votingMeetingList = new();
-    private Meeting? _selectedVotingMeeting;
+    private ObservableCollection<MeetingDto> _votingMeetingList = new();
+    private MeetingDto? _selectedVotingMeetingDto;
+    private Meeting? _selectedVotingMeeting; // Domain model (işlemler için gerekli)
     private string _votingMeetingStatus = "(Toplanti seciniz)";
     private string _decisionTitle = "";
     private string _decisionDescription = "";
     
     // Selection properties for DataGrids
-    private Meeting? _selectedRecentMeeting;
+    private MeetingDto? _selectedRecentMeeting;
     private object? _selectedRecentDecision;
-    private Unit? _selectedUnit;
-    private AgendaItem? _selectedAgendaItem;
-    private Document? _selectedDocument;
-    private Decision? _selectedVotingItem;
-    private Decision? _selectedDecision;
+    private UnitDto? _selectedUnit;
+    private AgendaItemDto? _selectedAgendaItem;
+    private DocumentDto? _selectedDocument;
+    private DecisionDto? _selectedVotingItem;
+    private DecisionDto? _selectedDecision;
     
     // Site search text
     private string _siteSearchText = "";
     private string _meetingSearchText = "";
     private string _votingMeetingSearchText = "";
 
+    private readonly IUnitOfWork _unitOfWork;
+
     public MainWindowViewModel(
-        ToplantiDbContext context,
-        IAgendaItemRepository agendaItemRepository,
-        IDocumentRepository documentRepository,
-        IDecisionRepository decisionRepository,
+        IUnitOfWork unitOfWork,
         INotificationService notificationService,
         ISiteService siteService,
         IMeetingService meetingService,
@@ -93,6 +98,7 @@ public class MainWindowViewModel : ViewModelBase
         IVotingService votingService,
         IProxyService proxyService)
     {
+        _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _siteService = siteService ?? throw new ArgumentNullException(nameof(siteService));
         _meetingService = meetingService ?? throw new ArgumentNullException(nameof(meetingService));
@@ -132,10 +138,29 @@ public class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            if (value is Site site && SetProperty(ref _selectedSite, site))
+            if (value is SiteDto siteDto)
+            {
+                _selectedSiteDto = siteDto;
+                // Domain model'i de yükle (CreateMeetingDialog için gerekli)
+                LoadSiteDomainModelAsync(siteDto.Id);
+            }
+            else if (value is Site site && SetProperty(ref _selectedSite, site))
             {
                 OnSiteSelectionChanged();
             }
+    }
+    
+    private async void LoadSiteDomainModelAsync(int siteId)
+    {
+        try
+        {
+            _selectedSite = await _siteService.GetSiteDomainModelByIdAsync(siteId);
+            OnSiteSelectionChanged();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Site yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
         }
     }
 
@@ -194,7 +219,7 @@ public class MainWindowViewModel : ViewModelBase
         set => SetProperty(ref _totalLandShare, value);
     }
 
-    public ObservableCollection<Meeting> RecentMeetings
+    public ObservableCollection<MeetingDto> RecentMeetings
     {
         get => _recentMeetings;
         set => SetProperty(ref _recentMeetings, value);
@@ -207,45 +232,60 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     // Units Tab
-    public ObservableCollection<Unit> Units
+    public ObservableCollection<UnitDto> Units
     {
         get => _units;
         set => SetProperty(ref _units, value);
     }
 
     // Meetings Tab
-    public ObservableCollection<Meeting> Meetings
+    public ObservableCollection<MeetingDto> Meetings
     {
         get => _meetings;
         set => SetProperty(ref _meetings, value);
     }
 
-    public ObservableCollection<Meeting> MeetingSelectionList
+    public ObservableCollection<MeetingDto> MeetingSelectionList
     {
         get => _meetingSelectionList;
         set => SetProperty(ref _meetingSelectionList, value);
     }
 
-    public Meeting? SelectedMeeting
+    public MeetingDto? SelectedMeeting
     {
-        get => _selectedMeeting;
+        get => _selectedMeetingDto;
         set
         {
-            // Ignore if null or not a Meeting
-            if (value == null || value is not Meeting meeting)
+            // Ignore if null or not a MeetingDto
+            if (value == null)
             {
-                if (_selectedMeeting != null)
+                if (_selectedMeetingDto != null)
                 {
+                    _selectedMeetingDto = null;
                     _selectedMeeting = null;
                     CurrentMeeting = null;
                 }
                 return;
             }
 
-            if (SetProperty(ref _selectedMeeting, meeting))
+            if (SetProperty(ref _selectedMeetingDto, value))
             {
-                CurrentMeeting = meeting;
+                // Domain model'i de yükle (işlemler için gerekli)
+                LoadMeetingDomainModelAsync(value.Id);
             }
+        }
+    }
+    
+    private async void LoadMeetingDomainModelAsync(int meetingId)
+    {
+        try
+        {
+            _selectedMeeting = await _meetingService.GetMeetingDomainModelByIdAsync(meetingId);
+            CurrentMeeting = _selectedMeeting;
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Toplanti yukleme hatasi: {ex.Message}", "Hata", ex);
         }
     }
 
@@ -267,19 +307,19 @@ public class MainWindowViewModel : ViewModelBase
         set => SetProperty(ref _quorumInfo, value);
     }
 
-    public ObservableCollection<AgendaItem> AgendaItems
+    public ObservableCollection<AgendaItemDto> AgendaItems
     {
         get => _agendaItems;
         set => SetProperty(ref _agendaItems, value);
     }
 
-    public ObservableCollection<Document> Documents
+    public ObservableCollection<DocumentDto> Documents
     {
         get => _documents;
         set => SetProperty(ref _documents, value);
     }
 
-    public ObservableCollection<Decision> VotingItems
+    public ObservableCollection<DecisionDto> VotingItems
     {
         get => _votingItems;
         set => SetProperty(ref _votingItems, value);
@@ -371,7 +411,7 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     // Selection Properties
-    public Meeting? SelectedRecentMeeting
+    public MeetingDto? SelectedRecentMeeting
     {
         get => _selectedRecentMeeting;
         set
@@ -395,31 +435,31 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    public Unit? SelectedUnit
+    public UnitDto? SelectedUnit
     {
         get => _selectedUnit;
         set => SetProperty(ref _selectedUnit, value);
     }
 
-    public AgendaItem? SelectedAgendaItem
+    public AgendaItemDto? SelectedAgendaItem
     {
         get => _selectedAgendaItem;
         set => SetProperty(ref _selectedAgendaItem, value);
     }
 
-    public Document? SelectedDocument
+    public DocumentDto? SelectedDocument
     {
         get => _selectedDocument;
         set => SetProperty(ref _selectedDocument, value);
     }
 
-    public Decision? SelectedVotingItem
+    public DecisionDto? SelectedVotingItem
     {
         get => _selectedVotingItem;
         set => SetProperty(ref _selectedVotingItem, value);
     }
 
-    public Decision? SelectedDecision
+    public DecisionDto? SelectedDecision
     {
         get => _selectedDecision;
         set => SetProperty(ref _selectedDecision, value);
@@ -532,6 +572,12 @@ public class MainWindowViewModel : ViewModelBase
             var siteList = new List<object> { "Seciniz" };
             siteList.AddRange(sites);
             Sites = new ObservableCollection<object>(siteList);
+            
+            // SelectedSite domain model'ini de güncelle (CreateMeetingDialog için)
+            if (_selectedSiteDto != null)
+            {
+                _selectedSite = await _siteService.GetSiteDomainModelByIdAsync(_selectedSiteDto.Id);
+            }
         }
         catch (Exception ex)
         {
@@ -569,7 +615,7 @@ public class MainWindowViewModel : ViewModelBase
             TotalLandShare = stats.TotalLandShare.ToString("F2");
 
             var meetings = await _meetingService.GetMeetingsBySiteIdAsync(SelectedSite.Id);
-            RecentMeetings = new ObservableCollection<Meeting>(meetings.Take(5));
+            RecentMeetings = new ObservableCollection<MeetingDto>(meetings.Take(5));
 
             // Recent decisions loading logic would go here
             // This is simplified for now
@@ -598,12 +644,14 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var meeting = await _meetingService.GetMeetingByIdAsync(CurrentMeeting.Id);
-            if (meeting == null) return;
+            var meetingDto = await _meetingService.GetMeetingByIdAsync(CurrentMeeting.Id);
+            if (meetingDto == null) return;
 
-            CurrentMeeting = meeting;
+            // Domain model'i yükle (işlemler için gerekli)
+            CurrentMeeting = await _meetingService.GetMeetingDomainModelByIdAsync(meetingDto.Id);
+            if (CurrentMeeting == null) return;
 
-            MeetingStatus = meeting.IsCompleted ? "(Tamamlanmis)" : "";
+            MeetingStatus = meetingDto.IsCompleted ? "(Tamamlanmis)" : "";
             UpdateMeetingInfo();
             await LoadAgendaItemsAsync();
             await LoadDocumentsAsync();
@@ -650,8 +698,9 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var items = await _agendaItemRepository.GetAgendaItemsByMeetingIdAsync(CurrentMeeting.Id);
-            AgendaItems = new ObservableCollection<AgendaItem>(items);
+            var items = await _unitOfWork.AgendaItems.GetAgendaItemsByMeetingIdAsync(CurrentMeeting.Id);
+            var itemDtos = EntityMapper.ToDto(items);
+            AgendaItems = new ObservableCollection<AgendaItemDto>(itemDtos);
         }
         catch (Exception ex)
         {
@@ -665,8 +714,9 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var documents = await _documentRepository.GetDocumentsByMeetingIdAsync(CurrentMeeting.Id);
-            Documents = new ObservableCollection<Document>(documents);
+            var documents = await _unitOfWork.Documents.GetDocumentsByMeetingIdAsync(CurrentMeeting.Id);
+            var documentDtos = EntityMapper.ToDto(documents);
+            Documents = new ObservableCollection<DocumentDto>(documentDtos);
         }
         catch (Exception ex)
         {
@@ -680,8 +730,8 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var decisions = await _decisionRepository.GetDecisionsByMeetingIdAsync(CurrentMeeting.Id);
-            VotingItems = new ObservableCollection<Decision>(decisions);
+            var decisions = await _decisionService.GetDecisionsByMeetingIdAsync(CurrentMeeting.Id);
+            VotingItems = new ObservableCollection<DecisionDto>(decisions);
         }
         catch (Exception ex)
         {
@@ -711,9 +761,9 @@ public class MainWindowViewModel : ViewModelBase
         try
         {
             var meetings = await _meetingService.GetMeetingsBySiteIdAsync(SelectedSite.Id);
-            Meetings = new ObservableCollection<Meeting>(meetings);
-            MeetingSelectionList = new ObservableCollection<Meeting>(meetings);
-            VotingMeetingList = new ObservableCollection<Meeting>(meetings);
+            Meetings = new ObservableCollection<MeetingDto>(meetings);
+            MeetingSelectionList = new ObservableCollection<MeetingDto>(meetings);
+            VotingMeetingList = new ObservableCollection<MeetingDto>(meetings);
         }
         catch (Exception ex)
         {
@@ -728,7 +778,7 @@ public class MainWindowViewModel : ViewModelBase
         try
         {
             var units = await _unitService.GetUnitsBySiteIdAsync(SelectedSite.Id);
-            Units = new ObservableCollection<Unit>(units);
+            Units = new ObservableCollection<UnitDto>(units);
         }
         catch (Exception ex)
         {
@@ -754,8 +804,17 @@ public class MainWindowViewModel : ViewModelBase
             if (dialog.ShowDialog() == true && dialog.CreatedMeeting != null)
             {
                 await LoadMeetingsAsync();
-                CurrentMeeting = dialog.CreatedMeeting;
-                SelectedMeeting = CurrentMeeting;
+                // DTO'dan domain model'e dönüşüm
+                CurrentMeeting = await _meetingService.GetMeetingDomainModelByIdAsync(dialog.CreatedMeeting.Id);
+                if (CurrentMeeting != null)
+                {
+                    // SelectedMeeting DTO'sunu da güncelle
+                    var meetingDto = await _meetingService.GetMeetingByIdAsync(CurrentMeeting.Id);
+                    if (meetingDto != null)
+                    {
+                        SelectedMeeting = meetingDto;
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -923,8 +982,8 @@ public class MainWindowViewModel : ViewModelBase
                 Order = maxOrder + 1
             };
 
-            await _agendaItemRepository.AddAsync(agendaItem);
-            await _context.SaveChangesAsync();
+            await _unitOfWork.AgendaItems.AddAsync(agendaItem);
+            await _unitOfWork.SaveChangesAsync();
 
             AgendaTitle = "";
             await LoadAgendaItemsAsync();
@@ -1058,23 +1117,16 @@ public class MainWindowViewModel : ViewModelBase
         await Task.CompletedTask;
     }
 
-    private void ShowDecisionDetail(int decisionId)
+    private async void ShowDecisionDetail(int decisionId)
     {
         try
         {
-            var decision = await _decisionRepository.GetByIdAsync(decisionId);
+            var decision = await _decisionService.GetDecisionDomainModelByIdAsync(decisionId);
             
             if (decision != null)
             {
-                // Votes'ları yükle
-                var decisionsWithVotes = await _decisionRepository.GetDecisionsWithVotesByMeetingIdAsync(decision.MeetingId);
-                var decisionWithVotes = decisionsWithVotes.FirstOrDefault(d => d.Id == decisionId);
-                
-                if (decisionWithVotes != null)
-                {
-                    var window = new DecisionDetailWindow(decisionWithVotes);
-                    window.ShowDialog();
-                }
+                var window = new DecisionDetailWindow(decision);
+                window.ShowDialog();
             }
         }
         catch (Exception ex)
@@ -1089,7 +1141,7 @@ public class MainWindowViewModel : ViewModelBase
         aboutDialog.ShowDialog();
     }
 
-    private async Task MoveAgendaUpAsync(AgendaItem? item)
+    private async Task MoveAgendaUpAsync(AgendaItemDto? item)
     {
         if (item == null || CurrentMeeting == null) return;
 
@@ -1101,13 +1153,20 @@ public class MainWindowViewModel : ViewModelBase
             var previousItem = AgendaItems.FirstOrDefault(a => a.Order == currentOrder - 1);
             if (previousItem == null) return;
 
-            item.Order = currentOrder - 1;
-            previousItem.Order = currentOrder;
+            // Domain model'leri yükle ve güncelle
+            var itemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(item.Id);
+            var previousItemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(previousItem.Id);
+            
+            if (itemEntity != null && previousItemEntity != null)
+            {
+                itemEntity.Order = currentOrder - 1;
+                previousItemEntity.Order = currentOrder;
 
-            _agendaItemRepository.Update(item);
-            _agendaItemRepository.Update(previousItem);
-            await _context.SaveChangesAsync();
-            await LoadAgendaItemsAsync();
+                _unitOfWork.AgendaItems.Update(itemEntity);
+                _unitOfWork.AgendaItems.Update(previousItemEntity);
+                await _unitOfWork.SaveChangesAsync();
+                await LoadAgendaItemsAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -1115,7 +1174,7 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task MoveAgendaDownAsync(AgendaItem? item)
+    private async Task MoveAgendaDownAsync(AgendaItemDto? item)
     {
         if (item == null || CurrentMeeting == null) return;
 
@@ -1128,13 +1187,20 @@ public class MainWindowViewModel : ViewModelBase
             var nextItem = AgendaItems.FirstOrDefault(a => a.Order == currentOrder + 1);
             if (nextItem == null) return;
 
-            item.Order = currentOrder + 1;
-            nextItem.Order = currentOrder;
+            // Domain model'leri yükle ve güncelle
+            var itemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(item.Id);
+            var nextItemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(nextItem.Id);
+            
+            if (itemEntity != null && nextItemEntity != null)
+            {
+                itemEntity.Order = currentOrder + 1;
+                nextItemEntity.Order = currentOrder;
 
-            _unitOfWork.AgendaItems.Update(item);
-            _unitOfWork.AgendaItems.Update(nextItem);
-            await _unitOfWork.SaveChangesAsync();
-            await LoadAgendaItemsAsync();
+                _unitOfWork.AgendaItems.Update(itemEntity);
+                _unitOfWork.AgendaItems.Update(nextItemEntity);
+                await _unitOfWork.SaveChangesAsync();
+                await LoadAgendaItemsAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -1142,7 +1208,7 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task DeleteAgendaAsync(AgendaItem? item)
+    private async Task DeleteAgendaAsync(AgendaItemDto? item)
     {
         if (item == null || CurrentMeeting == null) return;
 
@@ -1151,9 +1217,13 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _unitOfWork.AgendaItems.Remove(item);
-            await _unitOfWork.SaveChangesAsync();
-            await LoadAgendaItemsAsync();
+            var itemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(item.Id);
+            if (itemEntity != null)
+            {
+                _unitOfWork.AgendaItems.Remove(itemEntity);
+                await _unitOfWork.SaveChangesAsync();
+                await LoadAgendaItemsAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -1161,7 +1231,7 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task DeleteDocumentAsync(Document? doc)
+    private async Task DeleteDocumentAsync(DocumentDto? doc)
     {
         if (doc == null || CurrentMeeting == null) return;
 
@@ -1170,9 +1240,13 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _unitOfWork.Documents.Remove(doc);
-            await _unitOfWork.SaveChangesAsync();
-            await LoadDocumentsAsync();
+            var docEntity = await _unitOfWork.Documents.GetByIdAsync(doc.Id);
+            if (docEntity != null)
+            {
+                _unitOfWork.Documents.Remove(docEntity);
+                await _unitOfWork.SaveChangesAsync();
+                await LoadDocumentsAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -1180,7 +1254,7 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task DeleteVotingAsync(Decision? decision)
+    private async Task DeleteVotingAsync(DecisionDto? decision)
     {
         if (decision == null || CurrentMeeting == null) return;
 
@@ -1189,8 +1263,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _unitOfWork.Decisions.Remove(decision);
-            await _unitOfWork.SaveChangesAsync();
+            await _decisionService.DeleteDecisionAsync(decision.Id);
             await LoadVotingItemsAsync();
             await LoadDecisionsAsync();
         }
