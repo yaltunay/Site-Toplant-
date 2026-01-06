@@ -1,5 +1,4 @@
 using Toplanti.Data;
-using Toplanti.Data.Repositories;
 using Toplanti.Models;
 using Toplanti.Services.Interfaces;
 
@@ -7,28 +6,26 @@ namespace Toplanti.Services;
 
 public class UnitService : IUnitService
 {
-    private readonly IUnitRepository _unitRepository;
-    private readonly ToplantiDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public UnitService(IUnitRepository unitRepository, ToplantiDbContext context)
+    public UnitService(IUnitOfWork unitOfWork)
     {
-        _unitRepository = unitRepository ?? throw new ArgumentNullException(nameof(unitRepository));
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
     }
 
     public async Task<IEnumerable<Unit>> GetUnitsBySiteIdAsync(int siteId)
     {
-        return await _unitRepository.GetActiveUnitsBySiteIdAsync(siteId);
+        return await _unitOfWork.Units.GetActiveUnitsBySiteIdAsync(siteId);
     }
 
     public async Task<bool> DeleteUnitAsync(int unitId)
     {
-        var unit = await _unitRepository.GetByIdAsync(unitId);
+        var unit = await _unitOfWork.Units.GetByIdAsync(unitId);
         if (unit == null) return false;
 
         unit.IsActive = false;
-        _unitRepository.Update(unit);
-        await _context.SaveChangesAsync();
+        _unitOfWork.Units.Update(unit);
+        await _unitOfWork.SaveChangesAsync();
         return true;
     }
 }

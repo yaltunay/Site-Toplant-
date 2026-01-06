@@ -79,7 +79,7 @@ public class MeetingValidationService : IMeetingValidationService
     /// </summary>
     public ValidationResult ValidateMeetingAndContext(Meeting? meeting, ToplantiDbContext? context, string? errorMessage = null)
     {
-        if (context == null || meeting == null)
+        if (meeting == null)
         {
             return ValidationResult.Failure(errorMessage ?? "Lutfen once bir toplanti secin.");
         }

@@ -1,28 +1,28 @@
 using System.Windows;
-using Toplanti.Data;
 using Toplanti.Models;
+using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Dialogs;
 
 public partial class CreateMeetingDialog : Window
 {
-    private readonly ToplantiDbContext? _context;
+    private readonly IMeetingService _meetingService;
     private readonly Site? _selectedSite;
     public Meeting? CreatedMeeting { get; private set; }
 
-    public CreateMeetingDialog(ToplantiDbContext context, Site selectedSite)
+    public CreateMeetingDialog(IMeetingService meetingService, Site selectedSite)
     {
         InitializeComponent();
-        _context = context;
+        _meetingService = meetingService ?? throw new ArgumentNullException(nameof(meetingService));
         _selectedSite = selectedSite;
         
         dpMeetingDate.SelectedDate = DateTime.Now;
         txtMeetingTitle.Focus();
     }
 
-    private void BtnSave_Click(object sender, RoutedEventArgs e)
+    private async void BtnSave_Click(object sender, RoutedEventArgs e)
     {
-        if (_context == null || _selectedSite == null)
+        if (_selectedSite == null)
         {
             MessageBox.Show("Site bilgisi bulunamadi.", "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
             return;
@@ -44,10 +44,7 @@ public partial class CreateMeetingDialog : Window
 
         try
         {
-            var totalUnits = _context.Units.Count(u => u.SiteId == _selectedSite.Id && u.IsActive);
-            var totalLandShare = _selectedSite.TotalLandShare;
-
-            var meeting = new Meeting
+            var meeting = await _meetingService.CreateMeetingAsync(
             {
                 Title = txtMeetingTitle.Text.Trim(),
                 MeetingDate = dpMeetingDate.SelectedDate.Value,
