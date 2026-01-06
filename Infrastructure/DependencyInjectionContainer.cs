@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Toplanti.Data;
+using Toplanti.Data.Repositories;
 using Toplanti.Services;
 using Toplanti.Services.Interfaces;
 using Toplanti.ViewModels;
@@ -37,6 +38,16 @@ public static class DependencyInjectionContainer
             options.UseSqlServer(connectionString),
             ServiceLifetime.Scoped);
 
+        // Repositories
+        services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped<IMeetingRepository, MeetingRepository>();
+        services.AddScoped<IUnitRepository, UnitRepository>();
+        services.AddScoped<ISiteRepository, SiteRepository>();
+        services.AddScoped<IDecisionRepository, DecisionRepository>();
+        services.AddScoped<IAgendaItemRepository, AgendaItemRepository>();
+        services.AddScoped<IDocumentRepository, DocumentRepository>();
+        services.AddScoped<IMeetingAttendanceRepository, MeetingAttendanceRepository>();
+
         // Core Services
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IQuorumService, QuorumService>();
@@ -50,10 +61,15 @@ public static class DependencyInjectionContainer
         services.AddScoped<IMeetingService>(sp =>
         {
             var context = sp.GetRequiredService<ToplantiDbContext>();
+            var meetingRepository = sp.GetRequiredService<IMeetingRepository>();
+            var unitRepository = sp.GetRequiredService<IUnitRepository>();
+            var decisionRepository = sp.GetRequiredService<IDecisionRepository>();
+            var meetingAttendanceRepository = sp.GetRequiredService<IMeetingAttendanceRepository>();
+            var siteRepository = sp.GetRequiredService<ISiteRepository>();
             var quorumService = sp.GetRequiredService<IQuorumService>();
             var proxyService = sp.GetRequiredService<IProxyService>();
             var votingService = sp.GetRequiredService<IVotingService>();
-            return new MeetingService(context, quorumService, proxyService, votingService);
+            return new MeetingService(context, meetingRepository, unitRepository, decisionRepository, meetingAttendanceRepository, siteRepository, quorumService, proxyService, votingService);
         });
 
         // ValidationService - DbContext'e bağımlı
@@ -64,7 +80,37 @@ public static class DependencyInjectionContainer
         });
 
         // ViewModels - Transient olarak kaydet (her kullanımda yeni instance)
-        services.AddTransient<MainWindowViewModel>();
+        services.AddTransient<MainWindowViewModel>(sp =>
+        {
+            var context = sp.GetRequiredService<ToplantiDbContext>();
+            var agendaItemRepository = sp.GetRequiredService<IAgendaItemRepository>();
+            var documentRepository = sp.GetRequiredService<IDocumentRepository>();
+            var decisionRepository = sp.GetRequiredService<IDecisionRepository>();
+            var notificationService = sp.GetRequiredService<INotificationService>();
+            var siteService = sp.GetRequiredService<ISiteService>();
+            var meetingService = sp.GetRequiredService<IMeetingService>();
+            var unitService = sp.GetRequiredService<IUnitService>();
+            var decisionService = sp.GetRequiredService<IDecisionService>();
+            var validationService = sp.GetRequiredService<IMeetingValidationService>();
+            var quorumService = sp.GetRequiredService<IQuorumService>();
+            var votingService = sp.GetRequiredService<IVotingService>();
+            var proxyService = sp.GetRequiredService<IProxyService>();
+            
+            return new MainWindowViewModel(
+                context,
+                agendaItemRepository,
+                documentRepository,
+                decisionRepository,
+                notificationService,
+                siteService,
+                meetingService,
+                unitService,
+                decisionService,
+                validationService,
+                quorumService,
+                votingService,
+                proxyService);
+        });
 
         // Views - Transient olarak kaydet
         services.AddTransient<MainWindow>(sp =>

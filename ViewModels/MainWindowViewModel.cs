@@ -1,8 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
-using Microsoft.EntityFrameworkCore;
-using Toplanti.Data;
+using Toplanti.Data.Repositories;
 using Toplanti.Dialogs;
 using Toplanti.Models;
 using Toplanti.Services.Interfaces;
@@ -13,6 +12,9 @@ namespace Toplanti.ViewModels;
 public class MainWindowViewModel : ViewModelBase
 {
     private readonly ToplantiDbContext _context;
+    private readonly IAgendaItemRepository _agendaItemRepository;
+    private readonly IDocumentRepository _documentRepository;
+    private readonly IDecisionRepository _decisionRepository;
     private readonly INotificationService _notificationService;
     private readonly ISiteService _siteService;
     private readonly IMeetingService _meetingService;
@@ -82,6 +84,9 @@ public class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel(
         ToplantiDbContext context,
+        IAgendaItemRepository agendaItemRepository,
+        IDocumentRepository documentRepository,
+        IDecisionRepository decisionRepository,
         INotificationService notificationService,
         ISiteService siteService,
         IMeetingService meetingService,
@@ -93,6 +98,9 @@ public class MainWindowViewModel : ViewModelBase
         IProxyService proxyService)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _agendaItemRepository = agendaItemRepository ?? throw new ArgumentNullException(nameof(agendaItemRepository));
+        _documentRepository = documentRepository ?? throw new ArgumentNullException(nameof(documentRepository));
+        _decisionRepository = decisionRepository ?? throw new ArgumentNullException(nameof(decisionRepository));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _siteService = siteService ?? throw new ArgumentNullException(nameof(siteService));
         _meetingService = meetingService ?? throw new ArgumentNullException(nameof(meetingService));
@@ -650,11 +658,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var items = await _context.AgendaItems
-                .Where(a => a.MeetingId == CurrentMeeting.Id)
-                .OrderBy(a => a.Order)
-                .ToListAsync();
-
+            var items = await _agendaItemRepository.GetAgendaItemsByMeetingIdAsync(CurrentMeeting.Id);
             AgendaItems = new ObservableCollection<AgendaItem>(items);
         }
         catch (Exception ex)
@@ -669,11 +673,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var documents = await _context.Documents
-                .Where(d => d.MeetingId == CurrentMeeting.Id)
-                .OrderBy(d => d.CreatedAt)
-                .ToListAsync();
-
+            var documents = await _documentRepository.GetDocumentsByMeetingIdAsync(CurrentMeeting.Id);
             Documents = new ObservableCollection<Document>(documents);
         }
         catch (Exception ex)
@@ -688,11 +688,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var decisions = await _context.Decisions
-                .Where(d => d.MeetingId == CurrentMeeting.Id)
-                .OrderBy(d => d.CreatedAt)
-                .ToListAsync();
-
+            var decisions = await _decisionRepository.GetDecisionsByMeetingIdAsync(CurrentMeeting.Id);
             VotingItems = new ObservableCollection<Decision>(decisions);
         }
         catch (Exception ex)
@@ -935,7 +931,7 @@ public class MainWindowViewModel : ViewModelBase
                 Order = maxOrder + 1
             };
 
-            _context.AgendaItems.Add(agendaItem);
+            await _agendaItemRepository.AddAsync(agendaItem);
             await _context.SaveChangesAsync();
 
             AgendaTitle = "";
@@ -965,7 +961,7 @@ public class MainWindowViewModel : ViewModelBase
                 CreatedAt = DateTime.Now
             };
 
-            _context.Documents.Add(document);
+            await _documentRepository.AddAsync(document);
             await _context.SaveChangesAsync();
 
             DocumentTitle = "";
@@ -1074,15 +1070,19 @@ public class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            var decision = _context.Decisions
-                .Include(d => d.Votes)
-                    .ThenInclude(v => v.Unit)
-                .FirstOrDefault(d => d.Id == decisionId);
-
+            var decision = await _decisionRepository.GetByIdAsync(decisionId);
+            
             if (decision != null)
             {
-                var window = new DecisionDetailWindow(decision);
-                window.ShowDialog();
+                // Votes'ları yükle
+                var decisionsWithVotes = await _decisionRepository.GetDecisionsWithVotesByMeetingIdAsync(decision.MeetingId);
+                var decisionWithVotes = decisionsWithVotes.FirstOrDefault(d => d.Id == decisionId);
+                
+                if (decisionWithVotes != null)
+                {
+                    var window = new DecisionDetailWindow(decisionWithVotes);
+                    window.ShowDialog();
+                }
             }
         }
         catch (Exception ex)
@@ -1112,6 +1112,8 @@ public class MainWindowViewModel : ViewModelBase
             item.Order = currentOrder - 1;
             previousItem.Order = currentOrder;
 
+            _agendaItemRepository.Update(item);
+            _agendaItemRepository.Update(previousItem);
             await _context.SaveChangesAsync();
             await LoadAgendaItemsAsync();
         }
@@ -1137,6 +1139,8 @@ public class MainWindowViewModel : ViewModelBase
             item.Order = currentOrder + 1;
             nextItem.Order = currentOrder;
 
+            _agendaItemRepository.Update(item);
+            _agendaItemRepository.Update(nextItem);
             await _context.SaveChangesAsync();
             await LoadAgendaItemsAsync();
         }
@@ -1155,7 +1159,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _context.AgendaItems.Remove(item);
+            _agendaItemRepository.Remove(item);
             await _context.SaveChangesAsync();
             await LoadAgendaItemsAsync();
         }
@@ -1174,7 +1178,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _context.Documents.Remove(doc);
+            _documentRepository.Remove(doc);
             await _context.SaveChangesAsync();
             await LoadDocumentsAsync();
         }
@@ -1193,7 +1197,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _context.Decisions.Remove(decision);
+            _decisionRepository.Remove(decision);
             await _context.SaveChangesAsync();
             await LoadVotingItemsAsync();
             await LoadDecisionsAsync();

@@ -1,5 +1,5 @@
-using Microsoft.EntityFrameworkCore;
 using Toplanti.Data;
+using Toplanti.Data.Repositories;
 using Toplanti.Models;
 using Toplanti.Services.Interfaces;
 
@@ -7,10 +7,12 @@ namespace Toplanti.Services;
 
 public class DecisionService : IDecisionService
 {
+    private readonly IDecisionRepository _decisionRepository;
     private readonly ToplantiDbContext _context;
 
-    public DecisionService(ToplantiDbContext context)
+    public DecisionService(IDecisionRepository decisionRepository, ToplantiDbContext context)
     {
+        _decisionRepository = decisionRepository ?? throw new ArgumentNullException(nameof(decisionRepository));
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
@@ -27,7 +29,7 @@ public class DecisionService : IDecisionService
             IsApproved = false
         };
 
-        _context.Decisions.Add(decision);
+        await _decisionRepository.AddAsync(decision);
         await _context.SaveChangesAsync();
 
         return decision;
@@ -35,21 +37,15 @@ public class DecisionService : IDecisionService
 
     public async Task<IEnumerable<Decision>> GetDecisionsByMeetingIdAsync(int meetingId)
     {
-        return await _context.Decisions
-            .Include(d => d.Votes)
-                .ThenInclude(v => v.Unit)
-            .Include(d => d.Meeting)
-            .Where(d => d.MeetingId == meetingId)
-            .OrderByDescending(d => d.CreatedAt)
-            .ToListAsync();
+        return await _decisionRepository.GetDecisionsWithVotesByMeetingIdAsync(meetingId);
     }
 
     public async Task<bool> DeleteDecisionAsync(int decisionId)
     {
-        var decision = await _context.Decisions.FindAsync(decisionId);
+        var decision = await _decisionRepository.GetByIdAsync(decisionId);
         if (decision == null) return false;
 
-        _context.Decisions.Remove(decision);
+        _decisionRepository.Remove(decision);
         await _context.SaveChangesAsync();
         return true;
     }
