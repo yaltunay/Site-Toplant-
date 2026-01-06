@@ -11,9 +11,6 @@ namespace Toplanti.ViewModels;
 
 public class MainWindowViewModel : ViewModelBase
 {
-    private readonly IAgendaItemRepository _agendaItemRepository;
-    private readonly IDocumentRepository _documentRepository;
-    private readonly IDecisionRepository _decisionRepository;
     private readonly INotificationService _notificationService;
     private readonly ISiteService _siteService;
     private readonly IMeetingService _meetingService;
@@ -96,9 +93,6 @@ public class MainWindowViewModel : ViewModelBase
         IVotingService votingService,
         IProxyService proxyService)
     {
-        _agendaItemRepository = agendaItemRepository ?? throw new ArgumentNullException(nameof(agendaItemRepository));
-        _documentRepository = documentRepository ?? throw new ArgumentNullException(nameof(documentRepository));
-        _decisionRepository = decisionRepository ?? throw new ArgumentNullException(nameof(decisionRepository));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _siteService = siteService ?? throw new ArgumentNullException(nameof(siteService));
         _meetingService = meetingService ?? throw new ArgumentNullException(nameof(meetingService));
