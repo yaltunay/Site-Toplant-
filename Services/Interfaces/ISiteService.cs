@@ -1,4 +1,5 @@
 using Toplanti.Models;
+using Toplanti.Models.DTOs;
 
 namespace Toplanti.Services.Interfaces;
 
@@ -7,7 +8,10 @@ namespace Toplanti.Services.Interfaces;
 /// </summary>
 public interface ISiteService
 {
-    Task<IEnumerable<Site>> GetAllSitesAsync();
-    Task<Site?> GetSiteByIdAsync(int siteId);
+    Task<IEnumerable<SiteDto>> GetAllSitesAsync();
+    Task<SiteDto?> GetSiteByIdAsync(int siteId);
+    
+    // Domain model döndüren metodlar (backward compatibility için)
+    Task<Site?> GetSiteDomainModelByIdAsync(int siteId);
 }
 

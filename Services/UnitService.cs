@@ -1,5 +1,6 @@
 using Toplanti.Data;
-using Toplanti.Models;
+using Toplanti.Infrastructure.Mappings;
+using Toplanti.Models.DTOs;
 using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Services;
@@ -13,9 +14,10 @@ public class UnitService : IUnitService
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
     }
 
-    public async Task<IEnumerable<Unit>> GetUnitsBySiteIdAsync(int siteId)
+    public async Task<IEnumerable<UnitDto>> GetUnitsBySiteIdAsync(int siteId)
     {
-        return await _unitOfWork.Units.GetActiveUnitsBySiteIdAsync(siteId);
+        var units = await _unitOfWork.Units.GetActiveUnitsBySiteIdAsync(siteId);
+        return EntityMapper.ToDto(units);
     }
 
     public async Task<bool> DeleteUnitAsync(int unitId)

@@ -1,4 +1,4 @@
-using Toplanti.Models;
+using Toplanti.Models.DTOs;
 
 namespace Toplanti.Services.Interfaces;
 
@@ -7,7 +7,7 @@ namespace Toplanti.Services.Interfaces;
 /// </summary>
 public interface IUnitService
 {
-    Task<IEnumerable<Unit>> GetUnitsBySiteIdAsync(int siteId);
+    Task<IEnumerable<UnitDto>> GetUnitsBySiteIdAsync(int siteId);
     Task<bool> DeleteUnitAsync(int unitId);
 }
 
