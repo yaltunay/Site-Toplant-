@@ -1,5 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using Toplanti.Data;
+using Toplanti.Data.Repositories;
 using Toplanti.Models;
 using Toplanti.Services.Interfaces;
 
@@ -7,23 +6,21 @@ namespace Toplanti.Services;
 
 public class SiteService : ISiteService
 {
-    private readonly ToplantiDbContext _context;
+    private readonly ISiteRepository _siteRepository;
 
-    public SiteService(ToplantiDbContext context)
+    public SiteService(ISiteRepository siteRepository)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
     }
 
     public async Task<IEnumerable<Site>> GetAllSitesAsync()
     {
-        return await _context.Sites
-            .OrderBy(s => s.Name)
-            .ToListAsync();
+        return await _siteRepository.GetAllSitesOrderedAsync();
     }
 
     public async Task<Site?> GetSiteByIdAsync(int siteId)
     {
-        return await _context.Sites.FindAsync(siteId);
+        return await _siteRepository.GetByIdAsync(siteId);
     }
 }
 
