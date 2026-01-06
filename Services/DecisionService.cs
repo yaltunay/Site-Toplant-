@@ -1,5 +1,4 @@
 using Toplanti.Data;
-using Toplanti.Data.Repositories;
 using Toplanti.Models;
 using Toplanti.Services.Interfaces;
 
@@ -7,13 +6,11 @@ namespace Toplanti.Services;
 
 public class DecisionService : IDecisionService
 {
-    private readonly IDecisionRepository _decisionRepository;
-    private readonly ToplantiDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public DecisionService(IDecisionRepository decisionRepository, ToplantiDbContext context)
+    public DecisionService(IUnitOfWork unitOfWork)
     {
-        _decisionRepository = decisionRepository ?? throw new ArgumentNullException(nameof(decisionRepository));
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
     }
 
     public async Task<Decision> CreateDecisionAsync(int meetingId, string title, string description)
@@ -29,24 +26,24 @@ public class DecisionService : IDecisionService
             IsApproved = false
         };
 
-        await _decisionRepository.AddAsync(decision);
-        await _context.SaveChangesAsync();
+        await _unitOfWork.Decisions.AddAsync(decision);
+        await _unitOfWork.SaveChangesAsync();
 
         return decision;
     }
 
     public async Task<IEnumerable<Decision>> GetDecisionsByMeetingIdAsync(int meetingId)
     {
-        return await _decisionRepository.GetDecisionsWithVotesByMeetingIdAsync(meetingId);
+        return await _unitOfWork.Decisions.GetDecisionsWithVotesByMeetingIdAsync(meetingId);
     }
 
     public async Task<bool> DeleteDecisionAsync(int decisionId)
     {
-        var decision = await _decisionRepository.GetByIdAsync(decisionId);
+        var decision = await _unitOfWork.Decisions.GetByIdAsync(decisionId);
         if (decision == null) return false;
 
-        _decisionRepository.Remove(decision);
-        await _context.SaveChangesAsync();
+        _unitOfWork.Decisions.Remove(decision);
+        await _unitOfWork.SaveChangesAsync();
         return true;
     }
 }

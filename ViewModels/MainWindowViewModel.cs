@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
-using Toplanti.Data.Repositories;
+using Toplanti.Data;
 using Toplanti.Dialogs;
 using Toplanti.Models;
 using Toplanti.Services.Interfaces;
@@ -11,7 +11,6 @@ namespace Toplanti.ViewModels;
 
 public class MainWindowViewModel : ViewModelBase
 {
-    private readonly ToplantiDbContext _context;
     private readonly IAgendaItemRepository _agendaItemRepository;
     private readonly IDocumentRepository _documentRepository;
     private readonly IDecisionRepository _decisionRepository;
@@ -97,7 +96,6 @@ public class MainWindowViewModel : ViewModelBase
         IVotingService votingService,
         IProxyService proxyService)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
         _agendaItemRepository = agendaItemRepository ?? throw new ArgumentNullException(nameof(agendaItemRepository));
         _documentRepository = documentRepository ?? throw new ArgumentNullException(nameof(documentRepository));
         _decisionRepository = decisionRepository ?? throw new ArgumentNullException(nameof(decisionRepository));
@@ -758,7 +756,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var dialog = new CreateMeetingDialog(_context, SelectedSite);
+            var dialog = new CreateMeetingDialog(_meetingService, SelectedSite);
             if (dialog.ShowDialog() == true && dialog.CreatedMeeting != null)
             {
                 await LoadMeetingsAsync();
@@ -878,7 +876,7 @@ public class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var validation = _validationService.ValidateMeetingAndContext(CurrentMeeting, _context);
+        var validation = _validationService.ValidateMeetingAndContext(CurrentMeeting);
         if (!validation.IsValid)
         {
             _notificationService.ShowWarning(validation.ErrorMessage!);
@@ -961,8 +959,8 @@ public class MainWindowViewModel : ViewModelBase
                 CreatedAt = DateTime.Now
             };
 
-            await _documentRepository.AddAsync(document);
-            await _context.SaveChangesAsync();
+            await _unitOfWork.Documents.AddAsync(document);
+            await _unitOfWork.SaveChangesAsync();
 
             DocumentTitle = "";
             await LoadDocumentsAsync();
@@ -1139,9 +1137,9 @@ public class MainWindowViewModel : ViewModelBase
             item.Order = currentOrder + 1;
             nextItem.Order = currentOrder;
 
-            _agendaItemRepository.Update(item);
-            _agendaItemRepository.Update(nextItem);
-            await _context.SaveChangesAsync();
+            _unitOfWork.AgendaItems.Update(item);
+            _unitOfWork.AgendaItems.Update(nextItem);
+            await _unitOfWork.SaveChangesAsync();
             await LoadAgendaItemsAsync();
         }
         catch (Exception ex)
@@ -1159,8 +1157,8 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _agendaItemRepository.Remove(item);
-            await _context.SaveChangesAsync();
+            _unitOfWork.AgendaItems.Remove(item);
+            await _unitOfWork.SaveChangesAsync();
             await LoadAgendaItemsAsync();
         }
         catch (Exception ex)
@@ -1178,8 +1176,8 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _documentRepository.Remove(doc);
-            await _context.SaveChangesAsync();
+            _unitOfWork.Documents.Remove(doc);
+            await _unitOfWork.SaveChangesAsync();
             await LoadDocumentsAsync();
         }
         catch (Exception ex)
@@ -1197,8 +1195,8 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            _decisionRepository.Remove(decision);
-            await _context.SaveChangesAsync();
+            _unitOfWork.Decisions.Remove(decision);
+            await _unitOfWork.SaveChangesAsync();
             await LoadVotingItemsAsync();
             await LoadDecisionsAsync();
         }

@@ -11,7 +11,7 @@ public interface IMeetingValidationService
     ValidationResult ValidateMeetingNotCompleted(Meeting meeting, string? operationName = null);
     ValidationResult ValidateMeetingHasDecisions(Meeting meeting);
     ValidationResult ValidateMeetingAlreadyCompleted(Meeting meeting);
-    ValidationResult ValidateMeetingAndContext(Meeting? meeting, Toplanti.Data.ToplantiDbContext? context, string? errorMessage = null);
+    ValidationResult ValidateMeetingAndContext(Meeting? meeting, Toplanti.Data.ToplantiDbContext? context = null, string? errorMessage = null);
 }
 
 public class ValidationResult

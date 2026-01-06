@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Toplanti.Data;
 using Toplanti.Data.Repositories;
 using Toplanti.Models;
@@ -7,33 +8,21 @@ namespace Toplanti.Services;
 
 public class MeetingService : IMeetingService
 {
-    private readonly ToplantiDbContext _context;
-    private readonly IMeetingRepository _meetingRepository;
-    private readonly IUnitRepository _unitRepository;
-    private readonly IDecisionRepository _decisionRepository;
-    private readonly IMeetingAttendanceRepository _meetingAttendanceRepository;
-    private readonly ISiteRepository _siteRepository;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ToplantiDbContext _context; // Proxies için gerekli
     private readonly IQuorumService _quorumService;
     private readonly IProxyService _proxyService;
     private readonly IVotingService _votingService;
 
     public MeetingService(
+        IUnitOfWork unitOfWork,
         ToplantiDbContext context,
-        IMeetingRepository meetingRepository,
-        IUnitRepository unitRepository,
-        IDecisionRepository decisionRepository,
-        IMeetingAttendanceRepository meetingAttendanceRepository,
-        ISiteRepository siteRepository,
         IQuorumService quorumService,
         IProxyService proxyService,
         IVotingService votingService)
     {
+        _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _meetingRepository = meetingRepository ?? throw new ArgumentNullException(nameof(meetingRepository));
-        _unitRepository = unitRepository ?? throw new ArgumentNullException(nameof(unitRepository));
-        _decisionRepository = decisionRepository ?? throw new ArgumentNullException(nameof(decisionRepository));
-        _meetingAttendanceRepository = meetingAttendanceRepository ?? throw new ArgumentNullException(nameof(meetingAttendanceRepository));
-        _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
         _quorumService = quorumService ?? throw new ArgumentNullException(nameof(quorumService));
         _proxyService = proxyService ?? throw new ArgumentNullException(nameof(proxyService));
         _votingService = votingService ?? throw new ArgumentNullException(nameof(votingService));
@@ -41,7 +30,7 @@ public class MeetingService : IMeetingService
 
     public async Task<Meeting> CreateMeetingAsync(string title, DateTime meetingDate, Site site)
     {
-        var totalUnits = await _meetingRepository.GetActiveUnitCountBySiteIdAsync(site.Id);
+        var totalUnits = await _unitOfWork.Units.GetActiveUnitCountBySiteIdAsync(site.Id);
         var totalLandShare = site.TotalLandShare;
 
         var meeting = new Meeting
@@ -56,26 +45,26 @@ public class MeetingService : IMeetingService
             IsCompleted = false
         };
 
-        await _meetingRepository.AddAsync(meeting);
-        await _context.SaveChangesAsync();
+        await _unitOfWork.Meetings.AddAsync(meeting);
+        await _unitOfWork.SaveChangesAsync();
 
         return meeting;
     }
 
     public async Task<bool> CompleteMeetingAsync(int meetingId)
     {
-        var meeting = await _meetingRepository.GetByIdAsync(meetingId);
+        var meeting = await _unitOfWork.Meetings.GetByIdAsync(meetingId);
         if (meeting == null) return false;
 
         meeting.IsCompleted = true;
-        _meetingRepository.Update(meeting);
-        await _context.SaveChangesAsync();
+        _unitOfWork.Meetings.Update(meeting);
+        await _unitOfWork.SaveChangesAsync();
         return true;
     }
 
     public async Task<QuorumResult> CheckQuorumAsync(int meetingId)
     {
-        var meeting = await _meetingRepository.GetMeetingWithDetailsAsync(meetingId);
+        var meeting = await _unitOfWork.Meetings.GetMeetingWithDetailsAsync(meetingId);
 
         if (meeting == null)
             return new QuorumResult { Achieved = false, Message = "Toplantı bulunamadı." };
@@ -97,20 +86,20 @@ public class MeetingService : IMeetingService
         meeting.AttendedUnitCount = attendedCount;
         meeting.AttendedLandShare = attendedLandShare;
         meeting.QuorumAchieved = achieved;
-        _meetingRepository.Update(meeting);
-        await _context.SaveChangesAsync();
+        _unitOfWork.Meetings.Update(meeting);
+        await _unitOfWork.SaveChangesAsync();
 
         return new QuorumResult { Achieved = achieved, Message = message };
     }
 
     public async Task<string> GenerateMeetingMinutesAsync(int meetingId)
     {
-        var meeting = await _meetingRepository.GetMeetingWithDetailsAsync(meetingId);
+        var meeting = await _unitOfWork.Meetings.GetMeetingWithDetailsAsync(meetingId);
 
         if (meeting == null)
             throw new InvalidOperationException("Toplantı bulunamadı.");
 
-        var allUnits = await _unitRepository.FindAsync(u => u.IsActive);
+        var allUnits = await _unitOfWork.Units.FindAsync(u => u.IsActive);
         var proxies = await _context.Proxies
             .Where(p => p.MeetingId == meetingId)
             .Include(p => p.GiverUnit)
@@ -123,33 +112,33 @@ public class MeetingService : IMeetingService
 
     public async Task<IEnumerable<Meeting>> GetMeetingsBySiteIdAsync(int siteId)
     {
-        return await _meetingRepository.GetMeetingsBySiteIdAsync(siteId);
+        return await _unitOfWork.Meetings.GetMeetingsBySiteIdAsync(siteId);
     }
 
     public async Task<Meeting?> GetMeetingByIdAsync(int meetingId)
     {
-        return await _meetingRepository.GetMeetingWithDetailsAsync(meetingId);
+        return await _unitOfWork.Meetings.GetMeetingWithDetailsAsync(meetingId);
     }
 
     public async Task<DashboardStats> GetDashboardStatsAsync(int siteId)
     {
-        var totalUnits = await _unitRepository.GetActiveUnitCountBySiteIdAsync(siteId);
+        var totalUnits = await _unitOfWork.Units.GetActiveUnitCountBySiteIdAsync(siteId);
 
-        var siteUnitIds = await _unitRepository.FindAsync(u => u.SiteId == siteId && u.IsActive);
+        var siteUnitIds = await _unitOfWork.Units.FindAsync(u => u.SiteId == siteId && u.IsActive);
         var siteUnitIdList = siteUnitIds.Select(u => u.Id).ToList();
 
-        var meetings = await _meetingRepository.GetMeetingsBySiteIdAsync(siteId);
+        var meetings = await _unitOfWork.Meetings.GetMeetingsBySiteIdAsync(siteId);
         var totalMeetings = meetings.Count();
 
         var meetingIds = siteUnitIdList.Any()
-            ? await _meetingAttendanceRepository.GetMeetingIdsByUnitIdsAsync(siteUnitIdList)
+            ? await _unitOfWork.MeetingAttendances.GetMeetingIdsByUnitIdsAsync(siteUnitIdList)
             : Enumerable.Empty<int>();
 
         var totalDecisions = meetingIds.Any()
-            ? await _decisionRepository.CountDecisionsByMeetingIdsAsync(meetingIds)
+            ? await _unitOfWork.Decisions.CountDecisionsByMeetingIdsAsync(meetingIds)
             : 0;
 
-        var site = await _siteRepository.GetByIdAsync(siteId);
+        var site = await _unitOfWork.Sites.GetByIdAsync(siteId);
         var totalLandShare = site?.TotalLandShare ?? 0m;
 
         return new DashboardStats
