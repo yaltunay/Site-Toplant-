@@ -20,6 +20,7 @@ public class UnitOfWork : IUnitOfWork
     private IAgendaItemRepository? _agendaItems;
     private IDocumentRepository? _documents;
     private IMeetingAttendanceRepository? _meetingAttendances;
+    private IUnitTypeRepository? _unitTypes;
 
     public UnitOfWork(ToplantiDbContext context)
     {
@@ -46,6 +47,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IMeetingAttendanceRepository MeetingAttendances =>
         _meetingAttendances ??= new MeetingAttendanceRepository(_context);
+
+    public IUnitTypeRepository UnitTypes =>
+        _unitTypes ??= new UnitTypeRepository(_context);
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {

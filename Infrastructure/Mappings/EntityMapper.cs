@@ -1,3 +1,4 @@
+using Mapster;
 using Toplanti.Models;
 using Toplanti.Models.DTOs;
 
@@ -5,6 +6,7 @@ namespace Toplanti.Infrastructure.Mappings;
 
 /// <summary>
 /// Entity'lerden DTO'lara mapping işlemlerini yöneten static sınıf
+/// Mapster kütüphanesi kullanılarak implement edilmiştir
 /// </summary>
 public static class EntityMapper
 {
@@ -13,23 +15,7 @@ public static class EntityMapper
     /// </summary>
     public static MeetingDto ToDto(Meeting meeting)
     {
-        return new MeetingDto
-        {
-            Id = meeting.Id,
-            MeetingDate = meeting.MeetingDate,
-            Title = meeting.Title,
-            Description = meeting.Description,
-            TotalSiteLandShare = meeting.TotalSiteLandShare,
-            TotalUnitCount = meeting.TotalUnitCount,
-            AttendedUnitCount = meeting.AttendedUnitCount,
-            AttendedLandShare = meeting.AttendedLandShare,
-            QuorumAchieved = meeting.QuorumAchieved,
-            IsCompleted = meeting.IsCompleted,
-            CreatedAt = meeting.CreatedAt,
-            AgendaItemCount = meeting.AgendaItems?.Count ?? 0,
-            DocumentCount = meeting.Documents?.Count ?? 0,
-            DecisionCount = meeting.Decisions?.Count ?? 0
-        };
+        return meeting.Adapt<MeetingDto>();
     }
 
     /// <summary>
@@ -37,7 +23,7 @@ public static class EntityMapper
     /// </summary>
     public static IEnumerable<MeetingDto> ToDto(IEnumerable<Meeting> meetings)
     {
-        return meetings.Select(ToDto);
+        return meetings.Adapt<IEnumerable<MeetingDto>>();
     }
 
     /// <summary>
@@ -45,22 +31,7 @@ public static class EntityMapper
     /// </summary>
     public static UnitDto ToDto(Unit unit)
     {
-        return new UnitDto
-        {
-            Id = unit.Id,
-            Number = unit.Number,
-            OwnerName = unit.OwnerName,
-            FirstName = unit.FirstName,
-            LastName = unit.LastName,
-            Phone = unit.Phone,
-            Email = unit.Email,
-            LandShare = unit.LandShare,
-            UnitTypeId = unit.UnitTypeId,
-            UnitTypeName = unit.UnitType?.Name,
-            Block = unit.Block,
-            SiteId = unit.SiteId,
-            IsActive = unit.IsActive
-        };
+        return unit.Adapt<UnitDto>();
     }
 
     /// <summary>
@@ -68,7 +39,7 @@ public static class EntityMapper
     /// </summary>
     public static IEnumerable<UnitDto> ToDto(IEnumerable<Unit> units)
     {
-        return units.Select(ToDto);
+        return units.Adapt<IEnumerable<UnitDto>>();
     }
 
     /// <summary>
@@ -76,24 +47,7 @@ public static class EntityMapper
     /// </summary>
     public static DecisionDto ToDto(Decision decision)
     {
-        return new DecisionDto
-        {
-            Id = decision.Id,
-            MeetingId = decision.MeetingId,
-            MeetingTitle = decision.Meeting?.Title ?? string.Empty,
-            Title = decision.Title,
-            Description = decision.Description,
-            YesVotes = decision.YesVotes,
-            NoVotes = decision.NoVotes,
-            AbstainVotes = decision.AbstainVotes,
-            YesLandShare = decision.YesLandShare,
-            NoLandShare = decision.NoLandShare,
-            AbstainLandShare = decision.AbstainLandShare,
-            IsApproved = decision.IsApproved,
-            DecisionText = decision.DecisionText,
-            CreatedAt = decision.CreatedAt,
-            TotalVotes = decision.YesVotes + decision.NoVotes + decision.AbstainVotes
-        };
+        return decision.Adapt<DecisionDto>();
     }
 
     /// <summary>
@@ -101,7 +55,7 @@ public static class EntityMapper
     /// </summary>
     public static IEnumerable<DecisionDto> ToDto(IEnumerable<Decision> decisions)
     {
-        return decisions.Select(ToDto);
+        return decisions.Adapt<IEnumerable<DecisionDto>>();
     }
 
     /// <summary>
@@ -109,13 +63,7 @@ public static class EntityMapper
     /// </summary>
     public static SiteDto ToDto(Site site)
     {
-        return new SiteDto
-        {
-            Id = site.Id,
-            Name = site.Name,
-            TotalLandShare = site.TotalLandShare,
-            UnitCount = site.Units?.Count(u => u.IsActive) ?? 0
-        };
+        return site.Adapt<SiteDto>();
     }
 
     /// <summary>
@@ -123,7 +71,7 @@ public static class EntityMapper
     /// </summary>
     public static IEnumerable<SiteDto> ToDto(IEnumerable<Site> sites)
     {
-        return sites.Select(ToDto);
+        return sites.Adapt<IEnumerable<SiteDto>>();
     }
 
     /// <summary>
@@ -131,15 +79,7 @@ public static class EntityMapper
     /// </summary>
     public static AgendaItemDto ToDto(AgendaItem agendaItem)
     {
-        return new AgendaItemDto
-        {
-            Id = agendaItem.Id,
-            MeetingId = agendaItem.MeetingId,
-            Title = agendaItem.Title,
-            Description = agendaItem.Description,
-            Order = agendaItem.Order,
-            CreatedAt = agendaItem.CreatedAt
-        };
+        return agendaItem.Adapt<AgendaItemDto>();
     }
 
     /// <summary>
@@ -147,7 +87,7 @@ public static class EntityMapper
     /// </summary>
     public static IEnumerable<AgendaItemDto> ToDto(IEnumerable<AgendaItem> agendaItems)
     {
-        return agendaItems.Select(ToDto);
+        return agendaItems.Adapt<IEnumerable<AgendaItemDto>>();
     }
 
     /// <summary>
@@ -155,15 +95,7 @@ public static class EntityMapper
     /// </summary>
     public static DocumentDto ToDto(Document document)
     {
-        return new DocumentDto
-        {
-            Id = document.Id,
-            MeetingId = document.MeetingId,
-            Title = document.Title,
-            DocumentType = document.DocumentType,
-            Content = document.Content,
-            CreatedAt = document.CreatedAt
-        };
+        return document.Adapt<DocumentDto>();
     }
 
     /// <summary>
@@ -171,7 +103,7 @@ public static class EntityMapper
     /// </summary>
     public static IEnumerable<DocumentDto> ToDto(IEnumerable<Document> documents)
     {
-        return documents.Select(ToDto);
+        return documents.Adapt<IEnumerable<DocumentDto>>();
     }
 }
 

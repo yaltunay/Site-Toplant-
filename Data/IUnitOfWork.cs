@@ -16,6 +16,7 @@ public interface IUnitOfWork : IDisposable
     IAgendaItemRepository AgendaItems { get; }
     IDocumentRepository Documents { get; }
     IMeetingAttendanceRepository MeetingAttendances { get; }
+    IUnitTypeRepository UnitTypes { get; }
 
     /// <summary>
     /// Tüm değişiklikleri veritabanına kaydeder
