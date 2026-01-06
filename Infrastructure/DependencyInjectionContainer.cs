@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Toplanti.Data;
 using Toplanti.Services;
@@ -17,11 +18,19 @@ public static class DependencyInjectionContainer
     /// Tüm servisleri kaydeder
     /// </summary>
     /// <param name="services">Service collection</param>
-    /// <param name="connectionString">Database connection string</param>
+    /// <param name="configuration">Configuration instance</param>
     /// <returns>Yapılandırılmış service collection</returns>
     public static IServiceCollection AddApplicationServices(
         this IServiceCollection services,
-        string connectionString)
+        IConfiguration configuration)
+    {
+        // Configuration servisini kaydet
+        services.AddSingleton<ApplicationConfiguration>(sp =>
+            new ApplicationConfiguration(configuration));
+
+        // Connection string'i al
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' bulunamadı.");
     {
         // Database Context
         services.AddDbContext<ToplantiDbContext>(options =>

@@ -33,6 +33,15 @@
     <Resource Include="Images\CompanyLogo.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <Target Name="PostBuildPublish" AfterTargets="Build" Condition="'$(IsPublishing)' != 'true'">
     <PropertyGroup>
       <PublishDir>$(MSBuildProjectDirectory)\..\Publish</PublishDir>

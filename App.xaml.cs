@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 using System.Windows;
@@ -24,19 +25,29 @@ public partial class App : Application
         
         try
         {
+            // Build Configuration
+            var configuration = BuildConfiguration();
+
             // Configure Dependency Injection
             var serviceCollection = new ServiceCollection();
-            var connectionString = ApplicationConfiguration.GetConnectionString();
-            serviceCollection.AddApplicationServices(connectionString);
+            serviceCollection.AddApplicationServices(configuration);
             _serviceProvider = serviceCollection.BuildServiceProvider();
 
             // Initialize database
             using var scope = _serviceProvider.CreateScope();
+            var appConfig = scope.ServiceProvider.GetRequiredService<ApplicationConfiguration>();
             var dbInitializer = new DatabaseInitializer(
                 scope.ServiceProvider.GetRequiredService<ToplantiDbContext>());
             
-            await dbInitializer.InitializeAsync();
-            await dbInitializer.SeedAsync();
+            if (appConfig.IsMigrationsEnabled())
+            {
+                await dbInitializer.InitializeAsync();
+            }
+            
+            if (appConfig.IsSeedingEnabled())
+            {
+                await dbInitializer.SeedAsync();
+            }
 
             // Create and show MainWindow with ViewModel
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
@@ -70,11 +81,34 @@ public partial class App : Application
         }
     }
 
+    private IConfiguration BuildConfiguration()
+    {
+        var builder = new ConfigurationBuilder()
+            .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true);
+
+        return builder.Build();
+    }
+
     private void ClearErrorFile()
     {
         try
         {
-            var errorFilePath = ApplicationConfiguration.GetErrorLogFilePath();
+            string errorFilePath;
+            
+            if (_serviceProvider != null)
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var appConfig = scope.ServiceProvider.GetRequiredService<ApplicationConfiguration>();
+                errorFilePath = appConfig.GetErrorLogFilePath();
+            }
+            else
+            {
+                // Fallback: Default path kullan
+                errorFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "hata.txt");
+            }
+            
             if (File.Exists(errorFilePath))
             {
                 File.Delete(errorFilePath);
@@ -90,7 +124,19 @@ public partial class App : Application
     {
         try
         {
-            var errorFilePath = ApplicationConfiguration.GetErrorLogFilePath();
+            string errorFilePath;
+            
+            if (_serviceProvider != null)
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var appConfig = scope.ServiceProvider.GetRequiredService<ApplicationConfiguration>();
+                errorFilePath = appConfig.GetErrorLogFilePath();
+            }
+            else
+            {
+                // Fallback: Default path kullan
+                errorFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "hata.txt");
+            }
             
             // Yeni hata metnini oluştur
             var newErrorText = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}]\n" +
