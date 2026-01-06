@@ -45,19 +45,9 @@ public partial class CreateMeetingDialog : Window
         try
         {
             var meeting = await _meetingService.CreateMeetingAsync(
-            {
-                Title = txtMeetingTitle.Text.Trim(),
-                MeetingDate = dpMeetingDate.SelectedDate.Value,
-                TotalSiteLandShare = totalLandShare,
-                TotalUnitCount = totalUnits,
-                AttendedUnitCount = 0,
-                AttendedLandShare = 0,
-                QuorumAchieved = false,
-                IsCompleted = false
-            };
-
-            _context.Meetings.Add(meeting);
-            _context.SaveChanges();
+                txtMeetingTitle.Text.Trim(),
+                dpMeetingDate.SelectedDate.Value,
+                _selectedSite);
 
             CreatedMeeting = meeting;
             DialogResult = true;
