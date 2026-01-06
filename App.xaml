@@ -1,0 +1,17 @@
+<Application x:Class="Toplanti.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:Toplanti.Converters"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <converters:BoolToStatusConverter x:Key="BoolToStatusConverter"/>
+            <converters:BoolToYesNoConverter x:Key="BoolToYesNoConverter"/>
+            <converters:BoolToApprovedConverter x:Key="BoolToApprovedConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
+

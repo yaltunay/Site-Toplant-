@@ -1,0 +1,480 @@
+<Window x:Class="Toplanti.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Toplantı ve Karar Yönetim Sistemi" 
+        Height="800" Width="1200"
+        Background="{StaticResource BackgroundColor}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{StaticResource PrimaryColor}" Padding="20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0" Text="Toplantı ve Karar Yönetim Sistemi (KMK 30-31 Uyumlu)" 
+                          Foreground="White" 
+                          FontSize="24" 
+                          FontWeight="Bold" VerticalAlignment="Center"/>
+                
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="Site:" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0" FontSize="14"/>
+                    <ComboBox x:Name="cmbSite" Width="250" DisplayMemberPath="Name" SelectionChanged="CmbSite_SelectionChanged" 
+                              VerticalAlignment="Center" Background="White" Foreground="Black" Margin="0,0,15,0"
+                              IsEditable="True" IsTextSearchEnabled="True" TextBoxBase.TextChanged="CmbSite_TextChanged"
+                              FontSize="14" Height="36" Padding="8,6" VerticalContentAlignment="Center">
+                        <ComboBox.Resources>
+                            <Style TargetType="TextBox">
+                                <Setter Property="FontSize" Value="14"/>
+                            </Style>
+                        </ComboBox.Resources>
+                    </ComboBox>
+                    <Button Content="Hakkinda" x:Name="btnAbout" Click="BtnAbout_Click" 
+                            VerticalAlignment="Center" Padding="10,5" Background="#FF2C3E50" Foreground="White" 
+                            BorderThickness="0" Cursor="Hand" FontSize="12"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        
+        <!-- Main Content - Dashboard -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <Grid Margin="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Site Seçilmediyse Mesaj -->
+                <Border Grid.Row="0" x:Name="borderNoSite" Background="#FFF5F5F5" BorderBrush="#FFCCCCCC" BorderThickness="1" 
+                        CornerRadius="5" Padding="20" Margin="0,0,0,20" Visibility="Visible">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="Lutfen bir site secin" FontSize="18" FontWeight="Bold" 
+                                   Foreground="#FF666666" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                        <TextBlock Text="Site secerek dashboard'u goruntuleyebilirsiniz" 
+                                   FontSize="14" Foreground="#FF999999" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                
+                <!-- Dashboard İçeriği -->
+                <StackPanel Grid.Row="0" x:Name="spDashboard" Visibility="Collapsed">
+                    <!-- Özet İstatistikler -->
+                    <TextBlock Text="Ozet Istatistikler" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
+                    <Grid Margin="0,0,0,30">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Toplam Birim Kartı -->
+                        <Border Grid.Column="0" Background="#FF3498DB" CornerRadius="8" Padding="20" Cursor="Hand" 
+                                MouseLeftButtonDown="CardUnits_MouseLeftButtonDown">
+                            <StackPanel>
+                                <TextBlock Text="TOPLAM BIRIM" FontSize="12" Foreground="White" Opacity="0.9"/>
+                                <TextBlock x:Name="txtTotalUnits" Text="0" FontSize="32" FontWeight="Bold" Foreground="White" Margin="0,5,0,0"/>
+                                <TextBlock Text="Birim" FontSize="14" Foreground="White" Opacity="0.8" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- Toplam Toplantı Kartı -->
+                        <Border Grid.Column="2" Background="#FF2ECC71" CornerRadius="8" Padding="20" Cursor="Hand"
+                                MouseLeftButtonDown="CardMeetings_MouseLeftButtonDown">
+                            <StackPanel>
+                                <TextBlock Text="TOPLAM TOPLANTI" FontSize="12" Foreground="White" Opacity="0.9"/>
+                                <TextBlock x:Name="txtTotalMeetings" Text="0" FontSize="32" FontWeight="Bold" Foreground="White" Margin="0,5,0,0"/>
+                                <TextBlock Text="Toplanti" FontSize="14" Foreground="White" Opacity="0.8" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- Toplam Karar Kartı -->
+                        <Border Grid.Column="4" Background="#FFE74C3C" CornerRadius="8" Padding="20" Cursor="Hand"
+                                MouseLeftButtonDown="CardDecisions_MouseLeftButtonDown">
+                            <StackPanel>
+                                <TextBlock Text="TOPLAM KARAR" FontSize="12" Foreground="White" Opacity="0.9"/>
+                                <TextBlock x:Name="txtTotalDecisions" Text="0" FontSize="32" FontWeight="Bold" Foreground="White" Margin="0,5,0,0"/>
+                                <TextBlock Text="Karar" FontSize="14" Foreground="White" Opacity="0.8" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- Toplam Arsa Payı Kartı -->
+                        <Border Grid.Column="6" Background="#FFF39C12" CornerRadius="8" Padding="20">
+                            <StackPanel>
+                                <TextBlock Text="TOPLAM ARSA PAYI" FontSize="12" Foreground="White" Opacity="0.9"/>
+                                <TextBlock x:Name="txtTotalLandShareDashboard" Text="0.00" FontSize="28" FontWeight="Bold" Foreground="White" Margin="0,5,0,0"/>
+                                <TextBlock Text="Arsa Payi" FontSize="14" Foreground="White" Opacity="0.8" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    
+                    <!-- Son Toplantılar -->
+                    <Grid Margin="0,0,0,20">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock Text="Son Toplantilar" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Button Content="Detaylara Git" HorizontalAlignment="Right" x:Name="btnMeetingsDetail" 
+                                    Click="BtnMeetingsDetail_Click" Padding="10,5"/>
+                        </Grid>
+                        
+                        <DataGrid Grid.Row="1" x:Name="dgRecentMeetings" AutoGenerateColumns="False" 
+                                  MaxHeight="200" IsReadOnly="True" SelectionChanged="DgRecentMeetings_SelectionChanged">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Tarih" Binding="{Binding MeetingDate, StringFormat=dd.MM.yyyy HH:mm}" Width="150"/>
+                                <DataGridTextColumn Header="Baslik" Binding="{Binding Title}" Width="*"/>
+                                <DataGridTextColumn Header="Katilan" Binding="{Binding AttendedUnitCount}" Width="80"/>
+                                <DataGridTextColumn Header="Yeter Sayi" Binding="{Binding QuorumAchieved, Converter={StaticResource BoolToYesNoConverter}}" Width="100"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                    
+                    <!-- Son Kararlar -->
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock Text="Son Kararlar" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Button Content="Detaylara Git" HorizontalAlignment="Right" x:Name="btnDecisionsDetail" 
+                                    Click="BtnDecisionsDetail_Click" Padding="10,5"/>
+                        </Grid>
+                        
+                        <DataGrid Grid.Row="1" x:Name="dgRecentDecisions" AutoGenerateColumns="False" 
+                                  MaxHeight="200" IsReadOnly="True" SelectionChanged="DgRecentDecisions_SelectionChanged">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Baslik" Binding="{Binding Title}" Width="*"/>
+                                <DataGridTextColumn Header="Evet" Binding="{Binding YesVotes}" Width="60"/>
+                                <DataGridTextColumn Header="Hayir" Binding="{Binding NoVotes}" Width="60"/>
+                                <DataGridTextColumn Header="Cekimser" Binding="{Binding AbstainVotes}" Width="70"/>
+                                <DataGridTextColumn Header="Durum" Binding="{Binding IsApproved, Converter={StaticResource BoolToApprovedConverter}}" Width="100"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </StackPanel>
+                
+                <!-- Detay Sayfaları (Gizli TabControl) -->
+                <TabControl Grid.Row="1" x:Name="tcDetails" Visibility="Collapsed" Margin="0,20,0,0">
+                    <!-- Units Tab -->
+                    <TabItem Header="Birim Yonetimi" x:Name="tabUnits">
+                        <Grid Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+                                <Button Content="Blok ve Daire Yonetimi" x:Name="btnBlockManagement" 
+                                        Click="BtnBlockManagement_Click" Margin="5" HorizontalAlignment="Left" Width="200"/>
+                                <Button Content="Dashboard'a Don" Click="BtnBackToDashboard_Click" Margin="5"/>
+                            </StackPanel>
+                            
+                            <DataGrid Grid.Row="1" x:Name="dgUnits" AutoGenerateColumns="False" Margin="5">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Birim No" Binding="{Binding Number}" Width="100"/>
+                                    <DataGridTextColumn Header="Mal Sahibi" Binding="{Binding OwnerName}" Width="200"/>
+                                    <DataGridTextColumn Header="Arsa Payi" Binding="{Binding LandShare, StringFormat=F2}" Width="100"/>
+                                    <DataGridTextColumn Header="Tip" Binding="{Binding UnitType.Name}" Width="100"/>
+                                    <DataGridTextColumn Header="Durum" Binding="{Binding IsActive, Converter={StaticResource BoolToStatusConverter}}" Width="80"/>
+                                    <DataGridTemplateColumn Header="Islemler" Width="100">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Content="Sil" Click="BtnDeleteUnit_Click" Tag="{Binding Id}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+                    
+                    <!-- Meeting Tab -->
+                    <TabItem Header="Toplanti Yonetimi" x:Name="tabMeetings">
+                        <Grid Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <GroupBox Grid.Row="0" Header="Toplanti Secimi" Margin="5" Padding="10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <TextBlock Grid.Column="0" Text="Toplanti:" VerticalAlignment="Center" Margin="5" FontWeight="Bold"/>
+                                    <ComboBox Grid.Column="1" x:Name="cmbMeetingSelection" DisplayMemberPath="Title" SelectionChanged="CmbMeetingSelection_SelectionChanged" Margin="5"
+                                              IsEditable="True" IsTextSearchEnabled="True" TextBoxBase.TextChanged="CmbMeetingSelection_TextChanged"
+                                              FontSize="14" Height="32"/>
+                                    <TextBlock Grid.Column="2" x:Name="txtMeetingStatus" VerticalAlignment="Center" Margin="5" FontWeight="Bold" Foreground="Red"/>
+                                </Grid>
+                            </GroupBox>
+                            
+                            <GroupBox Grid.Row="1" Header="Yeni Toplanti Olustur" Margin="5" Padding="10">
+                                <Grid>
+                                    <Button Content="Yeni Toplanti Olustur" x:Name="btnCreateMeeting" Click="BtnCreateMeeting_Click" Margin="5" 
+                                            HorizontalAlignment="Left" Width="200" Height="35" FontSize="14"/>
+                                </Grid>
+                            </GroupBox>
+                            
+                            <GroupBox Grid.Row="2" Header="Gundem" Margin="5" Padding="10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <TextBlock Grid.Column="0" Text="Gundem Basligi:" VerticalAlignment="Center" Margin="5"/>
+                                        <TextBox Grid.Column="1" x:Name="txtAgendaTitle" Margin="5"/>
+                                        <Button Grid.Column="2" Content="Gundem Ekle" x:Name="btnAddAgenda" Click="BtnAddAgenda_Click" Margin="5"/>
+                                    </Grid>
+                                    
+                                    <DataGrid Grid.Row="1" x:Name="dgAgendaItems" AutoGenerateColumns="False" Margin="5" CanUserAddRows="False" Height="150">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Sira" Binding="{Binding Order}" Width="50" IsReadOnly="True"/>
+                                            <DataGridTextColumn Header="Baslik" Binding="{Binding Title}" Width="*"/>
+                                            <DataGridTextColumn Header="Aciklama" Binding="{Binding Description}" Width="*"/>
+                                            <DataGridTemplateColumn Header="Islemler" Width="200">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Button Content="Yukari" Click="BtnMoveAgendaUp_Click" Margin="2" Width="60"/>
+                                                            <Button Content="Asagi" Click="BtnMoveAgendaDown_Click" Margin="2" Width="60"/>
+                                                            <Button Content="Sil" Click="BtnDeleteAgenda_Click" Margin="2" Width="50"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Grid>
+                            </GroupBox>
+                            
+                            <GroupBox Grid.Row="3" Header="Belgeler" Margin="5" Padding="10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <TextBlock Grid.Column="0" Text="Belge Basligi:" VerticalAlignment="Center" Margin="5"/>
+                                        <TextBox Grid.Column="1" x:Name="txtDocumentTitle" Margin="5"/>
+                                        
+                                        <TextBlock Grid.Column="2" Text="Belge Tipi:" VerticalAlignment="Center" Margin="5"/>
+                                        <ComboBox Grid.Column="3" x:Name="cmbDocumentType" Margin="5" IsEditable="True" IsTextSearchEnabled="True"
+                                                  FontSize="14" Height="32">
+                                            <ComboBoxItem Content="Genel Kurul Icraat Raporu" IsSelected="True" FontSize="14"/>
+                                            <ComboBoxItem Content="Denetci Raporu" FontSize="14"/>
+                                            <ComboBoxItem Content="Diger" FontSize="14"/>
+                                        </ComboBox>
+                                        
+                                        <Button Grid.Column="4" Content="Belge Ekle" x:Name="btnAddDocument" Click="BtnAddDocument_Click" Margin="5"/>
+                                    </Grid>
+                                    
+                                    <DataGrid Grid.Row="1" x:Name="dgDocuments" AutoGenerateColumns="False" Margin="5" CanUserAddRows="False" Height="150">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Baslik" Binding="{Binding Title}" Width="*"/>
+                                            <DataGridTextColumn Header="Tip" Binding="{Binding DocumentType}" Width="200"/>
+                                            <DataGridTemplateColumn Header="Islemler" Width="100">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Button Content="Sil" Click="BtnDeleteDocument_Click" Margin="2"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Grid>
+                            </GroupBox>
+                            
+                            <GroupBox Grid.Row="4" Header="Oylama Maddeleri" Margin="5" Padding="10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <TextBlock Grid.Column="0" Text="Oylama Basligi:" VerticalAlignment="Center" Margin="5"/>
+                                        <TextBox Grid.Column="1" x:Name="txtVotingTitle" Margin="5"/>
+                                        
+                                        <TextBlock Grid.Column="2" Text="Aciklama:" VerticalAlignment="Center" Margin="5"/>
+                                        <TextBox Grid.Column="3" x:Name="txtVotingDescription" Margin="5"/>
+                                        
+                                        <Button Grid.Column="4" Content="Oylama Ekle" x:Name="btnAddVoting" Click="BtnAddVoting_Click" Margin="5"/>
+                                    </Grid>
+                                    
+                                    <DataGrid Grid.Row="1" x:Name="dgVotingItems" AutoGenerateColumns="False" Margin="5" CanUserAddRows="False" Height="150">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Baslik" Binding="{Binding Title}" Width="*"/>
+                                            <DataGridTextColumn Header="Aciklama" Binding="{Binding Description}" Width="*"/>
+                                            <DataGridTemplateColumn Header="Islemler" Width="100">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Button Content="Sil" Click="BtnDeleteVoting_Click" Margin="2"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Grid>
+                            </GroupBox>
+                            
+                            <GroupBox Grid.Row="5" Header="Toplanti Bilgileri" Margin="5" Padding="10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock x:Name="txtMeetingInfo" TextWrapping="Wrap" Margin="5"/>
+                                        <TextBlock x:Name="txtQuorumInfo" TextWrapping="Wrap" Margin="5" FontWeight="Bold"/>
+                                    </StackPanel>
+                                    
+                                    <StackPanel Grid.Column="1" Orientation="Vertical">
+                                        <Button Content="Katilim Ekle" x:Name="btnAddAttendance" Click="BtnAddAttendance_Click" Margin="5"/>
+                                        <Button Content="Vekalet Ekle" x:Name="btnAddProxy" Click="BtnAddProxy_Click" Margin="5"/>
+                                        <Button Content="Yeter Sayi Kontrolu" x:Name="btnCheckQuorum" Click="BtnCheckQuorum_Click" Margin="5"/>
+                                        <Button Content="Toplantiyi Tamamla" x:Name="btnCompleteMeeting" Click="BtnCompleteMeeting_Click" Margin="5" Background="#27AE60" Foreground="White"/>
+                                        <Button Content="Tutanak Olustur" x:Name="btnGenerateMinutes" Click="BtnGenerateMinutes_Click" Margin="5"/>
+                                    </StackPanel>
+                                </Grid>
+                            </GroupBox>
+                            
+                            <DataGrid Grid.Row="6" x:Name="dgMeetings" AutoGenerateColumns="False" Margin="5" SelectionChanged="DgMeetings_SelectionChanged">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Tarih" Binding="{Binding MeetingDate, StringFormat=dd.MM.yyyy HH:mm}" Width="150"/>
+                                    <DataGridTextColumn Header="Baslik" Binding="{Binding Title}" Width="*"/>
+                                    <DataGridTextColumn Header="Toplam Birim" Binding="{Binding TotalUnitCount}" Width="100"/>
+                                    <DataGridTextColumn Header="Katilan Birim" Binding="{Binding AttendedUnitCount}" Width="100"/>
+                                    <DataGridTextColumn Header="Yeter Sayi" Binding="{Binding QuorumAchieved, Converter={StaticResource BoolToYesNoConverter}}" Width="100"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+                    
+                    <!-- Voting Tab -->
+                    <TabItem Header="Oylama" x:Name="tabDecisions">
+                        <Grid Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <GroupBox Grid.Row="0" Header="Toplanti Secimi" Margin="5" Padding="10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <TextBlock Grid.Column="0" Text="Toplanti:" VerticalAlignment="Center" Margin="5" FontWeight="Bold"/>
+                                    <ComboBox Grid.Column="1" x:Name="cmbVotingMeeting" DisplayMemberPath="Title" SelectionChanged="CmbVotingMeeting_SelectionChanged" Margin="5"
+                                              IsEditable="True" IsTextSearchEnabled="True" TextBoxBase.TextChanged="CmbVotingMeeting_TextChanged"
+                                              FontSize="14" Height="32"/>
+                                    <TextBlock Grid.Column="2" x:Name="txtVotingMeetingStatus" VerticalAlignment="Center" Margin="5" FontWeight="Bold" Foreground="Red"/>
+                                </Grid>
+                            </GroupBox>
+                            
+                            <GroupBox Grid.Row="1" Header="Yeni Karar/Oylama" Margin="5" Padding="10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <TextBlock Grid.Column="0" Text="Karar Basligi:" VerticalAlignment="Center" Margin="5"/>
+                                    <TextBox Grid.Column="1" x:Name="txtDecisionTitle" Margin="5"/>
+                                    
+                                    <TextBlock Grid.Column="2" Text="Aciklama:" VerticalAlignment="Center" Margin="5"/>
+                                    <TextBox Grid.Column="3" x:Name="txtDecisionDescription" Margin="5"/>
+                                    
+                                    <Button Grid.Column="4" Content="Karar Olustur" x:Name="btnCreateDecision" Click="BtnCreateDecision_Click" Margin="5"/>
+                                </Grid>
+                            </GroupBox>
+                            
+                            <DataGrid Grid.Row="1" x:Name="dgDecisions" AutoGenerateColumns="False" Margin="5" SelectionChanged="DgDecisions_SelectionChanged">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Baslik" Binding="{Binding Title}" Width="*"/>
+                                    <DataGridTextColumn Header="Evet" Binding="{Binding YesVotes}" Width="80"/>
+                                    <DataGridTextColumn Header="Hayir" Binding="{Binding NoVotes}" Width="80"/>
+                                    <DataGridTextColumn Header="Cekimser" Binding="{Binding AbstainVotes}" Width="80"/>
+                                    <DataGridTextColumn Header="Durum" Binding="{Binding IsApproved, Converter={StaticResource BoolToApprovedConverter}}" Width="100"/>
+                                    <DataGridTemplateColumn Header="Islemler" Width="150">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Button Content="Oyla" Click="BtnVote_Click" Tag="{Binding Id}" Margin="2"/>
+                                                    <Button Content="Detay" Click="BtnDecisionDetail_Click" Tag="{Binding Id}" Margin="2"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+                </Grid>
+            </ScrollViewer>
+        
+        <!-- Gizli Veri Silme Butonu (Sağ alt köşe) -->
+        <Button x:Name="btnHiddenDelete" Content="" Width="8" Height="8" 
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" 
+                Margin="0,0,8,8" Background="Transparent" BorderThickness="0"
+                Click="BtnHiddenDelete_Click" Opacity="0.01" Cursor="Hand"/>
+    </Grid>
+</Window>
+
