@@ -1,8 +1,9 @@
 using Toplanti.Models;
+using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Services;
 
-public class VotingService
+public class VotingService : IVotingService
 {
     public (int yesCount, int noCount, int abstainCount, decimal yesLandShare, decimal noLandShare, decimal abstainLandShare) CalculateVotes(
         ICollection<Vote> votes,

@@ -1,13 +1,19 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Toplanti.Data;
+using Toplanti.Services;
+using Toplanti.Services.Interfaces;
+using Toplanti.ViewModels;
 
 namespace Toplanti;
 
 public partial class App : Application
 {
+    private ServiceProvider? _serviceProvider;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -52,11 +58,72 @@ public partial class App : Application
                 context.UnitTypes.AddRange(unitTypes);
                 context.SaveChanges();
             }
+
+            // Configure Dependency Injection
+            var serviceCollection = new ServiceCollection();
+            ConfigureServices(serviceCollection);
+            _serviceProvider = serviceCollection.BuildServiceProvider();
+
+            // Create and show MainWindow with ViewModel
+            var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+            mainWindow.Show();
         }
         catch (Exception ex)
         {
             WriteErrorToFile(ex);
         }
+    }
+
+    private void ConfigureServices(IServiceCollection services)
+    {
+        // DbContext - Scoped olarak kaydet (her request için yeni instance)
+        var optionsBuilder = new DbContextOptionsBuilder<ToplantiDbContext>();
+        optionsBuilder.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ToplantiDb;Trusted_Connection=true;MultipleActiveResultSets=true");
+        services.AddDbContext<ToplantiDbContext>(options =>
+            options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ToplantiDb;Trusted_Connection=true;MultipleActiveResultSets=true"),
+            ServiceLifetime.Scoped);
+
+        // Services - Scoped olarak kaydet
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IQuorumService, QuorumService>();
+        services.AddScoped<IVotingService, VotingService>();
+        services.AddScoped<IProxyService, ProxyService>();
+        services.AddScoped<ISiteService, SiteService>();
+        services.AddScoped<IUnitService, UnitService>();
+        services.AddScoped<IDecisionService, DecisionService>();
+        
+        // MeetingService - diğer servislere bağımlı
+        services.AddScoped<IMeetingService>(sp =>
+        {
+            var context = sp.GetRequiredService<ToplantiDbContext>();
+            var quorumService = sp.GetRequiredService<IQuorumService>();
+            var proxyService = sp.GetRequiredService<IProxyService>();
+            var votingService = sp.GetRequiredService<IVotingService>();
+            return new MeetingService(context, quorumService, proxyService, votingService);
+        });
+        
+        // ValidationService - DbContext'e bağımlı olduğu için Scoped
+        services.AddScoped<IMeetingValidationService>(sp =>
+        {
+            var context = sp.GetRequiredService<ToplantiDbContext>();
+            return new MeetingValidationService(context);
+        });
+
+        // ViewModels - Transient olarak kaydet (her kullanımda yeni instance)
+        services.AddTransient<MainWindowViewModel>();
+
+        // Views - Transient olarak kaydet
+        services.AddTransient<MainWindow>(sp =>
+        {
+            var viewModel = sp.GetRequiredService<MainWindowViewModel>();
+            return new MainWindow(viewModel);
+        });
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _serviceProvider?.Dispose();
+        base.OnExit(e);
     }
 
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

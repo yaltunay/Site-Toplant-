@@ -1,16 +1,17 @@
 using System.Windows;
+using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Services;
 
 /// <summary>
 /// Kullanıcı bildirimlerini yöneten servis (DRY prensibi)
 /// </summary>
-public static class NotificationService
+public class NotificationService : INotificationService
 {
     /// <summary>
     /// Bilgi mesajı gösterir
     /// </summary>
-    public static void ShowInfo(string message, string title = "Bilgi")
+    public void ShowInfo(string message, string title = "Bilgi")
     {
         MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -18,7 +19,7 @@ public static class NotificationService
     /// <summary>
     /// Uyarı mesajı gösterir
     /// </summary>
-    public static void ShowWarning(string message, string title = "Uyari")
+    public void ShowWarning(string message, string title = "Uyari")
     {
         MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
@@ -26,7 +27,7 @@ public static class NotificationService
     /// <summary>
     /// Hata mesajı gösterir
     /// </summary>
-    public static void ShowError(string message, string title = "Hata", Exception? exception = null)
+    public void ShowError(string message, string title = "Hata", Exception? exception = null)
     {
         var fullMessage = message;
         if (exception != null)
@@ -39,7 +40,7 @@ public static class NotificationService
     /// <summary>
     /// Başarı mesajı gösterir
     /// </summary>
-    public static void ShowSuccess(string message, string title = "Basarili")
+    public void ShowSuccess(string message, string title = "Basarili")
     {
         MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -47,7 +48,7 @@ public static class NotificationService
     /// <summary>
     /// Onay mesajı gösterir
     /// </summary>
-    public static MessageBoxResult ShowConfirmation(string message, string title = "Onay")
+    public MessageBoxResult ShowConfirmation(string message, string title = "Onay")
     {
         return MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
     }
@@ -55,7 +56,7 @@ public static class NotificationService
     /// <summary>
     /// Kritik hata mesajı gösterir ve uygulamayı kapatır
     /// </summary>
-    public static void ShowCriticalError(string message, Exception? exception = null)
+    public void ShowCriticalError(string message, Exception? exception = null)
     {
         var fullMessage = $"{message}\n\nDetay: {exception?.ToString() ?? "Bilinmeyen hata"}";
         MessageBox.Show(fullMessage, "Kritik Hata", MessageBoxButton.OK, MessageBoxImage.Error);

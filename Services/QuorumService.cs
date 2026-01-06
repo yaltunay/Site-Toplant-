@@ -1,8 +1,9 @@
 using Toplanti.Models;
+using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Services;
 
-public class QuorumService
+public class QuorumService : IQuorumService
 {
     public (bool achieved, string message) CheckQuorum(
         int totalUnitCount,
