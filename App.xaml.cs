@@ -1,12 +1,9 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Toplanti.Data;
-using Toplanti.Services;
-using Toplanti.Services.Interfaces;
-using Toplanti.ViewModels;
+using Toplanti.Infrastructure;
 
 namespace Toplanti;
 
@@ -14,7 +11,7 @@ public partial class App : Application
 {
     private ServiceProvider? _serviceProvider;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         
@@ -27,42 +24,19 @@ public partial class App : Application
         
         try
         {
-            // Initialize database
-            var optionsBuilder = new DbContextOptionsBuilder<ToplantiDbContext>();
-            optionsBuilder.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ToplantiDb;Trusted_Connection=true;MultipleActiveResultSets=true");
-            
-            using var context = new ToplantiDbContext(optionsBuilder.Options);
-            
-            // Ensure database exists, then apply migrations
-            if (context.Database.CanConnect())
-            {
-                // Database exists, apply migrations
-                context.Database.Migrate();
-            }
-            else
-            {
-                // Database doesn't exist, create it and apply migrations
-                context.Database.Migrate();
-            }
-            
-            // Seed initial data if needed - UnitTypes must be created first
-            if (!context.UnitTypes.Any())
-            {
-                var unitTypes = new List<Models.UnitType>
-                {
-                    new Models.UnitType { Name = "Villa", LandShareMultiplier = 1.5m, Description = "Villa tipi birim" },
-                    new Models.UnitType { Name = "Daire", LandShareMultiplier = 1.0m, Description = "Daire tipi birim" },
-                    new Models.UnitType { Name = "Dükkan", LandShareMultiplier = 1.2m, Description = "Dükkan tipi birim" }
-                };
-                
-                context.UnitTypes.AddRange(unitTypes);
-                context.SaveChanges();
-            }
-
             // Configure Dependency Injection
             var serviceCollection = new ServiceCollection();
-            ConfigureServices(serviceCollection);
+            var connectionString = ApplicationConfiguration.GetConnectionString();
+            serviceCollection.AddApplicationServices(connectionString);
             _serviceProvider = serviceCollection.BuildServiceProvider();
+
+            // Initialize database
+            using var scope = _serviceProvider.CreateScope();
+            var dbInitializer = new DatabaseInitializer(
+                scope.ServiceProvider.GetRequiredService<ToplantiDbContext>());
+            
+            await dbInitializer.InitializeAsync();
+            await dbInitializer.SeedAsync();
 
             // Create and show MainWindow with ViewModel
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
@@ -74,51 +48,6 @@ public partial class App : Application
         }
     }
 
-    private void ConfigureServices(IServiceCollection services)
-    {
-        // DbContext - Scoped olarak kaydet (her request için yeni instance)
-        var optionsBuilder = new DbContextOptionsBuilder<ToplantiDbContext>();
-        optionsBuilder.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ToplantiDb;Trusted_Connection=true;MultipleActiveResultSets=true");
-        services.AddDbContext<ToplantiDbContext>(options =>
-            options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ToplantiDb;Trusted_Connection=true;MultipleActiveResultSets=true"),
-            ServiceLifetime.Scoped);
-
-        // Services - Scoped olarak kaydet
-        services.AddScoped<INotificationService, NotificationService>();
-        services.AddScoped<IQuorumService, QuorumService>();
-        services.AddScoped<IVotingService, VotingService>();
-        services.AddScoped<IProxyService, ProxyService>();
-        services.AddScoped<ISiteService, SiteService>();
-        services.AddScoped<IUnitService, UnitService>();
-        services.AddScoped<IDecisionService, DecisionService>();
-        
-        // MeetingService - diğer servislere bağımlı
-        services.AddScoped<IMeetingService>(sp =>
-        {
-            var context = sp.GetRequiredService<ToplantiDbContext>();
-            var quorumService = sp.GetRequiredService<IQuorumService>();
-            var proxyService = sp.GetRequiredService<IProxyService>();
-            var votingService = sp.GetRequiredService<IVotingService>();
-            return new MeetingService(context, quorumService, proxyService, votingService);
-        });
-        
-        // ValidationService - DbContext'e bağımlı olduğu için Scoped
-        services.AddScoped<IMeetingValidationService>(sp =>
-        {
-            var context = sp.GetRequiredService<ToplantiDbContext>();
-            return new MeetingValidationService(context);
-        });
-
-        // ViewModels - Transient olarak kaydet (her kullanımda yeni instance)
-        services.AddTransient<MainWindowViewModel>();
-
-        // Views - Transient olarak kaydet
-        services.AddTransient<MainWindow>(sp =>
-        {
-            var viewModel = sp.GetRequiredService<MainWindowViewModel>();
-            return new MainWindow(viewModel);
-        });
-    }
 
     protected override void OnExit(ExitEventArgs e)
     {
@@ -145,7 +74,7 @@ public partial class App : Application
     {
         try
         {
-            var errorFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "hata.txt");
+            var errorFilePath = ApplicationConfiguration.GetErrorLogFilePath();
             if (File.Exists(errorFilePath))
             {
                 File.Delete(errorFilePath);
@@ -161,7 +90,7 @@ public partial class App : Application
     {
         try
         {
-            var errorFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "hata.txt");
+            var errorFilePath = ApplicationConfiguration.GetErrorLogFilePath();
             
             // Yeni hata metnini oluştur
             var newErrorText = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}]\n" +
