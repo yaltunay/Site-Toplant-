@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Toplanti.Data;
 using Toplanti.Data.Repositories;
 using Toplanti.Infrastructure.Mappings;
+using Toplanti.Infrastructure.Validation;
 using Toplanti.Models;
 using Toplanti.Models.DTOs;
 using Toplanti.Services.Interfaces;
@@ -15,19 +16,22 @@ public class MeetingService : IMeetingService
     private readonly IQuorumService _quorumService;
     private readonly IProxyService _proxyService;
     private readonly IVotingService _votingService;
+    private readonly ValidationService _validationService;
 
     public MeetingService(
         IUnitOfWork unitOfWork,
         ToplantiDbContext context,
         IQuorumService quorumService,
         IProxyService proxyService,
-        IVotingService votingService)
+        IVotingService votingService,
+        ValidationService validationService)
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _quorumService = quorumService ?? throw new ArgumentNullException(nameof(quorumService));
         _proxyService = proxyService ?? throw new ArgumentNullException(nameof(proxyService));
         _votingService = votingService ?? throw new ArgumentNullException(nameof(votingService));
+        _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
     }
 
     public async Task<MeetingDto> CreateMeetingAsync(string title, DateTime meetingDate, Site site)
@@ -46,6 +50,13 @@ public class MeetingService : IMeetingService
             QuorumAchieved = false,
             IsCompleted = false
         };
+
+        // Validate meeting
+        var validationResult = _validationService.ValidateMeeting(meeting);
+        if (!validationResult.IsValid)
+        {
+            throw new ArgumentException(validationResult.ErrorMessage ?? "Validation failed");
+        }
 
         await _unitOfWork.Meetings.AddAsync(meeting);
         await _unitOfWork.SaveChangesAsync();

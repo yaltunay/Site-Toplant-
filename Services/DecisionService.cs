@@ -1,5 +1,6 @@
 using Toplanti.Data;
 using Toplanti.Infrastructure.Mappings;
+using Toplanti.Infrastructure.Validation;
 using Toplanti.Models;
 using Toplanti.Models.DTOs;
 using Toplanti.Services.Interfaces;
@@ -9,10 +10,12 @@ namespace Toplanti.Services;
 public class DecisionService : IDecisionService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ValidationService _validationService;
 
-    public DecisionService(IUnitOfWork unitOfWork)
+    public DecisionService(IUnitOfWork unitOfWork, ValidationService validationService)
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
     }
 
     public async Task<DecisionDto> CreateDecisionAsync(int meetingId, string title, string description)
@@ -27,6 +30,13 @@ public class DecisionService : IDecisionService
             AbstainVotes = 0,
             IsApproved = false
         };
+
+        // Validate decision
+        var validationResult = _validationService.ValidateDecision(decision);
+        if (!validationResult.IsValid)
+        {
+            throw new ArgumentException(validationResult.ErrorMessage ?? "Validation failed");
+        }
 
         await _unitOfWork.Decisions.AddAsync(decision);
         await _unitOfWork.SaveChangesAsync();

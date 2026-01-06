@@ -1,8 +1,11 @@
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Toplanti.Data;
 using Toplanti.Data.Repositories;
+using Toplanti.Infrastructure.Validation;
+using Toplanti.Models;
 using Toplanti.Services;
 using Toplanti.Services.Interfaces;
 using Toplanti.ViewModels;
@@ -52,6 +55,15 @@ public static class DependencyInjectionContainer
         services.AddScoped<IMeetingAttendanceRepository, MeetingAttendanceRepository>();
         services.AddScoped<IUnitTypeRepository, UnitTypeRepository>();
 
+        // FluentValidation Validators
+        services.AddScoped<IValidator<Meeting>, MeetingValidator>();
+        services.AddScoped<IValidator<Unit>, UnitValidator>();
+        services.AddScoped<IValidator<Decision>, DecisionValidator>();
+        services.AddScoped<IValidator<Site>, SiteValidator>();
+
+        // Validation Service
+        services.AddScoped<ValidationService>();
+
         // Core Services
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IQuorumService, QuorumService>();
@@ -69,7 +81,8 @@ public static class DependencyInjectionContainer
             var quorumService = sp.GetRequiredService<IQuorumService>();
             var proxyService = sp.GetRequiredService<IProxyService>();
             var votingService = sp.GetRequiredService<IVotingService>();
-            return new MeetingService(unitOfWork, context, quorumService, proxyService, votingService);
+            var validationService = sp.GetRequiredService<ValidationService>();
+            return new MeetingService(unitOfWork, context, quorumService, proxyService, votingService, validationService);
         });
 
         // ValidationService - DbContext'e bağımlı
