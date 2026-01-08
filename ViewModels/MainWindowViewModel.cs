@@ -369,33 +369,48 @@ public class MainWindowViewModel : ViewModelBase
         set => SetProperty(ref _decisions, value);
     }
 
-    public ObservableCollection<Meeting> VotingMeetingList
+    public ObservableCollection<MeetingDto> VotingMeetingList
     {
         get => _votingMeetingList;
         set => SetProperty(ref _votingMeetingList, value);
     }
 
-    public Meeting? SelectedVotingMeeting
+    public MeetingDto? SelectedVotingMeeting
     {
-        get => _selectedVotingMeeting;
+        get => _selectedVotingMeetingDto;
         set
         {
-            // Ignore if null or not a Meeting
-            if (value == null || value is not Meeting meeting)
+            // Ignore if null or not a MeetingDto
+            if (value == null)
             {
-                if (_selectedVotingMeeting != null)
+                if (_selectedVotingMeetingDto != null)
                 {
+                    _selectedVotingMeetingDto = null;
                     _selectedVotingMeeting = null;
                     CurrentMeeting = null;
                 }
                 return;
             }
 
-            if (SetProperty(ref _selectedVotingMeeting, meeting))
+            if (SetProperty(ref _selectedVotingMeetingDto, value))
             {
-                CurrentMeeting = meeting;
-                LoadDecisionsAsync();
+                // Domain model'i de yükle (işlemler için gerekli)
+                LoadVotingMeetingDomainModelAsync(value.Id);
             }
+        }
+    }
+    
+    private async void LoadVotingMeetingDomainModelAsync(int meetingId)
+    {
+        try
+        {
+            _selectedVotingMeeting = await _meetingService.GetMeetingDomainModelByIdAsync(meetingId);
+            CurrentMeeting = _selectedVotingMeeting;
+            LoadDecisionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Toplanti yukleme hatasi: {ex.Message}", "Hata", ex);
         }
     }
 
@@ -560,11 +575,11 @@ public class MainWindowViewModel : ViewModelBase
         VoteCommand = new RelayCommand<int>(async id => await VoteAsync(id));
         DecisionDetailCommand = new RelayCommand<int>(id => ShowDecisionDetail(id));
         AboutCommand = new RelayCommand(_ => ShowAbout());
-        MoveAgendaUpCommand = new RelayCommand<AgendaItem>(async item => await MoveAgendaUpAsync(item));
-        MoveAgendaDownCommand = new RelayCommand<AgendaItem>(async item => await MoveAgendaDownAsync(item));
-        DeleteAgendaCommand = new RelayCommand<AgendaItem>(async item => await DeleteAgendaAsync(item));
-        DeleteDocumentCommand = new RelayCommand<Document>(async doc => await DeleteDocumentAsync(doc));
-        DeleteVotingCommand = new RelayCommand<Decision>(async decision => await DeleteVotingAsync(decision));
+        MoveAgendaUpCommand = new RelayCommand<AgendaItemDto>(async item => await MoveAgendaUpAsync(item));
+        MoveAgendaDownCommand = new RelayCommand<AgendaItemDto>(async item => await MoveAgendaDownAsync(item));
+        DeleteAgendaCommand = new RelayCommand<AgendaItemDto>(async item => await DeleteAgendaAsync(item));
+        DeleteDocumentCommand = new RelayCommand<DocumentDto>(async doc => await DeleteDocumentAsync(doc));
+        DeleteVotingCommand = new RelayCommand<DecisionDto>(async decision => await DeleteVotingAsync(decision));
         HiddenDeleteCommand = new RelayCommand(_ => HandleHiddenDelete());
     }
 
@@ -612,17 +627,17 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task LoadDashboardAsync()
     {
-        if (SelectedSite == null) return;
+        if (_selectedSiteDto == null) return;
 
         try
         {
-            var stats = await _meetingService.GetDashboardStatsAsync(SelectedSite.Id);
+            var stats = await _meetingService.GetDashboardStatsAsync(_selectedSiteDto.Id);
             TotalUnits = stats.TotalUnits.ToString();
             TotalMeetings = stats.TotalMeetings.ToString();
             TotalDecisions = stats.TotalDecisions.ToString();
             TotalLandShare = stats.TotalLandShare.ToString("F2");
 
-            var meetings = await _meetingService.GetMeetingsBySiteIdAsync(SelectedSite.Id);
+            var meetings = await _meetingService.GetMeetingsBySiteIdAsync(_selectedSiteDto.Id);
             RecentMeetings = new ObservableCollection<MeetingDto>(meetings.Take(5));
 
             // Recent decisions loading logic would go here
@@ -764,11 +779,11 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task LoadMeetingsAsync()
     {
-        if (SelectedSite == null) return;
+        if (_selectedSiteDto == null) return;
 
         try
         {
-            var meetings = await _meetingService.GetMeetingsBySiteIdAsync(SelectedSite.Id);
+            var meetings = await _meetingService.GetMeetingsBySiteIdAsync(_selectedSiteDto.Id);
             Meetings = new ObservableCollection<MeetingDto>(meetings);
             MeetingSelectionList = new ObservableCollection<MeetingDto>(meetings);
             VotingMeetingList = new ObservableCollection<MeetingDto>(meetings);
@@ -781,11 +796,11 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task LoadUnitsAsync()
     {
-        if (SelectedSite == null) return;
+        if (_selectedSiteDto == null) return;
 
         try
         {
-            var units = await _unitService.GetUnitsBySiteIdAsync(SelectedSite.Id);
+            var units = await _unitService.GetUnitsBySiteIdAsync(_selectedSiteDto.Id);
             Units = new ObservableCollection<UnitDto>(units);
         }
         catch (Exception ex)
@@ -808,7 +823,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var dialog = new CreateMeetingDialog(_meetingService, SelectedSite);
+            var dialog = new CreateMeetingDialog(_meetingService, _selectedSite);
             if (dialog.ShowDialog() == true && dialog.CreatedMeeting != null)
             {
                 await LoadMeetingsAsync();
@@ -1103,7 +1118,7 @@ public class MainWindowViewModel : ViewModelBase
 
     private void OpenBlockManagement()
     {
-        if (SelectedSite == null)
+        if (_selectedSite == null)
         {
             _notificationService.ShowWarning("Lutfen once bir site secin.");
             return;
@@ -1111,7 +1126,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var window = new BlockUnitManagementWindow(SelectedSite);
+            var window = new BlockUnitManagementWindow(_unitOfWork, _siteService, _unitService, _selectedSite);
             window.ShowDialog();
             LoadDashboardAsync();
         }

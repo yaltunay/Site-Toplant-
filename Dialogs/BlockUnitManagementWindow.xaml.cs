@@ -517,9 +517,9 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void BtnCreateUnits_Click(object sender, RoutedEventArgs e)
+    private async void BtnCreateUnits_Click(object sender, RoutedEventArgs e)
     {
-        if (_context == null || _currentSite == null)
+        if (_currentSite == null)
         {
             MessageBox.Show("Lutfen once site olusturun veya secin.", "Uyari", 
                 MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -539,7 +539,7 @@ public partial class BlockUnitManagementWindow : Window
         try
         {
             var blockName = txtBlockName.Text.Trim();
-            var existingUnits = _context.Units
+            var existingUnits = (await _unitOfWork.Units.GetAllAsync())
                 .Where(u => u.SiteId == _currentSite.Id && u.Block == blockName && u.IsActive)
                 .ToList();
 
@@ -579,7 +579,7 @@ public partial class BlockUnitManagementWindow : Window
             decimal landSharePerUnit = 0m;
             if (!unitLandShare.HasValue || unitLandShare.Value == 0)
             {
-                var totalUnits = _context.Units.Count(u => u.SiteId == _currentSite!.Id && u.IsActive);
+                var totalUnits = (await _unitOfWork.Units.GetAllAsync()).Count(u => u.SiteId == _currentSite!.Id && u.IsActive);
                 var totalUnitsAfterCreation = totalUnits + unitCount;
                 landSharePerUnit = totalUnitsAfterCreation > 0 
                     ? _currentSite.TotalLandShare / totalUnitsAfterCreation 
@@ -597,7 +597,8 @@ public partial class BlockUnitManagementWindow : Window
                 var unitNumber = maxNumber + i;
                 var formattedNumber = $"{safeBlockName} {unitNumber.ToString().PadLeft(paddingLength, '0')}";
                 
-                if (!_context.Units.Any(u => u.Number == formattedNumber && u.SiteId == _currentSite!.Id))
+                var allUnits = await _unitOfWork.Units.GetAllAsync();
+                if (!allUnits.Any(u => u.Number == formattedNumber && u.SiteId == _currentSite!.Id))
                 {
                     newUnits.Add(new Unit
                     {
@@ -618,8 +619,11 @@ public partial class BlockUnitManagementWindow : Window
 
             if (newUnits.Any())
             {
-                _context.Units.AddRange(newUnits);
-                _context.SaveChanges();
+                foreach (var unit in newUnits)
+                {
+                    await _unitOfWork.Units.AddAsync(unit);
+                }
+                await _unitOfWork.SaveChangesAsync();
                 
                 // Alanları temizle
                 txtBlockName.Clear();
@@ -733,9 +737,8 @@ public partial class BlockUnitManagementWindow : Window
         ApplyFilters(); // Filtreleri yeniden uygula
     }
 
-    private void BtnUpdateSelected_Click(object sender, RoutedEventArgs e)
+    private async void BtnUpdateSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (_context == null) return;
         
         var selectedUnits = _units.Where(u => u.IsSelected).ToList();
         if (!selectedUnits.Any())
@@ -779,7 +782,7 @@ public partial class BlockUnitManagementWindow : Window
                     return;
                 }
 
-                var unit = _context.Units.Find(unitVm.Id);
+                var unit = await _unitOfWork.Units.GetByIdAsync(unitVm.Id);
                 if (unit != null)
                 {
                     // İsim soyisim formatlaması (baş harfler büyük, soyisim tümü büyük)
@@ -792,10 +795,11 @@ public partial class BlockUnitManagementWindow : Window
                     unit.OwnerName = $"{unit.FirstName} {unit.LastName}";
                     
                     unit.LandShare = unitVm.LandShare;
+                    _unitOfWork.Units.Update(unit);
                 }
             }
 
-            _context.SaveChanges();
+            await _unitOfWork.SaveChangesAsync();
             LoadUnits();
             MessageBox.Show($"{selectedUnits.Count} daire basariyla guncellendi.", "Basarili", 
                 MessageBoxButton.OK, MessageBoxImage.Information);
@@ -807,9 +811,8 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void BtnSaveAll_Click(object sender, RoutedEventArgs e)
+    private async void BtnSaveAll_Click(object sender, RoutedEventArgs e)
     {
-        if (_context == null) return;
         
         try
         {
@@ -845,7 +848,7 @@ public partial class BlockUnitManagementWindow : Window
                     return;
                 }
 
-                var unit = _context.Units.Find(unitVm.Id);
+                var unit = await _unitOfWork.Units.GetByIdAsync(unitVm.Id);
                 if (unit != null)
                 {
                     // İsim soyisim formatlaması (baş harfler büyük, soyisim tümü büyük)
@@ -858,10 +861,11 @@ public partial class BlockUnitManagementWindow : Window
                     unit.OwnerName = $"{unit.FirstName} {unit.LastName}";
                     
                     unit.LandShare = unitVm.LandShare;
+                    _unitOfWork.Units.Update(unit);
                 }
             }
 
-            _context.SaveChanges();
+            await _unitOfWork.SaveChangesAsync();
             LoadUnits();
             MessageBox.Show("Tum daireler basariyla kaydedildi.", "Basarili", 
                 MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1240,10 +1244,8 @@ public partial class BlockUnitManagementWindow : Window
         dialog.ShowDialog();
     }
 
-    private void BtnDeleteFiltered_Click(object sender, RoutedEventArgs e)
+    private async void BtnDeleteFiltered_Click(object sender, RoutedEventArgs e)
     {
-        if (_context == null) return;
-
         var filteredUnits = GetFilteredUnits();
         if (!filteredUnits.Any())
         {
@@ -1261,14 +1263,16 @@ public partial class BlockUnitManagementWindow : Window
         try
         {
             var unitIds = filteredUnits.Select(u => u.Id).ToList();
-            var unitsToDelete = _context.Units.Where(u => unitIds.Contains(u.Id)).ToList();
+            var allUnits = await _unitOfWork.Units.GetAllAsync();
+            var unitsToDelete = allUnits.Where(u => unitIds.Contains(u.Id)).ToList();
             
             foreach (var unit in unitsToDelete)
             {
                 unit.IsActive = false;
+                _unitOfWork.Units.Update(unit);
             }
 
-            _context.SaveChanges();
+            await _unitOfWork.SaveChangesAsync();
             LoadUnits();
 
             MessageBox.Show($"{unitsToDelete.Count} daire basariyla silindi.", "Basarili", 
@@ -1281,9 +1285,9 @@ public partial class BlockUnitManagementWindow : Window
         }
     }
 
-    private void BtnDeleteBlock_Click(object sender, RoutedEventArgs e)
+    private async void BtnDeleteBlock_Click(object sender, RoutedEventArgs e)
     {
-        if (_context == null || _currentSite == null) return;
+        if (_currentSite == null) return;
 
         if (cmbFilterBlock.SelectedItem is not System.Windows.Controls.ComboBoxItem selectedBlock || 
             selectedBlock.Content?.ToString() == "Tum Bloklar" || 
@@ -1295,7 +1299,8 @@ public partial class BlockUnitManagementWindow : Window
         }
 
         var blockName = selectedBlock.Content.ToString();
-        var blockUnits = _context.Units
+        var allUnits = await _unitOfWork.Units.GetAllAsync();
+        var blockUnits = allUnits
             .Where(u => u.SiteId == _currentSite.Id && u.Block == blockName && u.IsActive)
             .ToList();
 
@@ -1317,9 +1322,10 @@ public partial class BlockUnitManagementWindow : Window
             foreach (var unit in blockUnits)
             {
                 unit.IsActive = false;
+                _unitOfWork.Units.Update(unit);
             }
 
-            _context.SaveChanges();
+            await _unitOfWork.SaveChangesAsync();
             LoadUnits();
 
             MessageBox.Show($"{blockName} bloguna ait {blockUnits.Count} daire basariyla silindi.", "Basarili", 
@@ -1363,7 +1369,6 @@ public partial class BlockUnitManagementWindow : Window
 
     private void BtnClose_Click(object sender, RoutedEventArgs e)
     {
-        _context?.Dispose();
         Close();
     }
 }

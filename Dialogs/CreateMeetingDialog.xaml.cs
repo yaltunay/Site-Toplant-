@@ -1,5 +1,6 @@
 using System.Windows;
 using Toplanti.Models;
+using Toplanti.Models.DTOs;
 using Toplanti.Services.Interfaces;
 
 namespace Toplanti.Dialogs;
@@ -8,7 +9,7 @@ public partial class CreateMeetingDialog : Window
 {
     private readonly IMeetingService _meetingService;
     private readonly Site? _selectedSite;
-    public Meeting? CreatedMeeting { get; private set; }
+    public MeetingDto? CreatedMeeting { get; private set; }
 
     public CreateMeetingDialog(IMeetingService meetingService, Site selectedSite)
     {
