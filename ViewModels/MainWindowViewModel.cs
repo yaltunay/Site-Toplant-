@@ -32,6 +32,7 @@ public class MainWindowViewModel : ViewModelBase
     private bool _isDashboardVisible = true;
     private bool _isDetailsVisible = false;
     private bool _isNoSiteVisible = true;
+    private int _selectedTabIndex = 0;
 
     // Dashboard Properties
     private string _totalUnits = "0";
@@ -192,6 +193,12 @@ public class MainWindowViewModel : ViewModelBase
     {
         get => _isNoSiteVisible;
         set => SetProperty(ref _isNoSiteVisible, value);
+    }
+
+    public int SelectedTabIndex
+    {
+        get => _selectedTabIndex;
+        set => SetProperty(ref _selectedTabIndex, value);
     }
 
     // Dashboard Properties
@@ -418,7 +425,8 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedRecentMeeting, value) && value != null)
             {
-                ShowMeetings();
+                // Fire and forget async operation from property setter
+                _ = ShowMeetingsAsync(value);
             }
         }
     }
@@ -1057,20 +1065,39 @@ public class MainWindowViewModel : ViewModelBase
     {
         IsDashboardVisible = false;
         IsDetailsVisible = true;
+        SelectedTabIndex = 0; // Units tab index
         LoadUnitsAsync();
+    }
+
+    private async Task ShowMeetingsAsync(MeetingDto? meetingToSelect = null)
+    {
+        IsDashboardVisible = false;
+        IsDetailsVisible = true;
+        SelectedTabIndex = 1; // Meetings tab index (0=Units, 1=Meetings, 2=Decisions)
+        await LoadMeetingsAsync();
+        
+        // After loading meetings, select the specified meeting if provided
+        if (meetingToSelect != null)
+        {
+            // Find the meeting in the loaded list by ID
+            var meeting = MeetingSelectionList.FirstOrDefault(m => m.Id == meetingToSelect.Id);
+            if (meeting != null)
+            {
+                SelectedMeeting = meeting;
+            }
+        }
     }
 
     private void ShowMeetings()
     {
-        IsDashboardVisible = false;
-        IsDetailsVisible = true;
-        LoadMeetingsAsync();
+        ShowMeetingsAsync();
     }
 
     private void ShowDecisions()
     {
         IsDashboardVisible = false;
         IsDetailsVisible = true;
+        SelectedTabIndex = 2; // Decisions tab index
         LoadDecisionsAsync();
     }
 

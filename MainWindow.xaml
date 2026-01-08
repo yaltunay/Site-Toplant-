@@ -186,6 +186,7 @@
                 <!-- Detay Sayfaları (Gizli TabControl) -->
                 <TabControl Grid.Row="1" x:Name="tcDetails" 
                            Visibility="{Binding IsDetailsVisible, Converter={StaticResource BooleanToVisibilityConverter}}" 
+                           SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}"
                            Margin="0,20,0,0">
                     <!-- Units Tab -->
                     <TabItem Header="Birim Yonetimi" x:Name="tabUnits">
