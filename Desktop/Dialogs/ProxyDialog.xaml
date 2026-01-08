@@ -1,0 +1,83 @@
+<Window x:Class="Toplanti.Dialogs.ProxyDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Vekalet Ekle" Height="600" Width="700"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <TextBlock Grid.Row="0" Text="Vekalet Veren Birim (Coklu secim yapabilirsiniz):" FontSize="14" FontWeight="Bold" Margin="5"/>
+        
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="5">
+            <Button Content="Tumunu Sec" x:Name="btnSelectAllGivers" Click="BtnSelectAllGivers_Click" Width="120" Height="30" Margin="5" FontSize="12"/>
+            <Button Content="Tumunu Kaldir" x:Name="btnDeselectAllGivers" Click="BtnDeselectAllGivers_Click" Width="120" Height="30" Margin="5" FontSize="12"/>
+        </StackPanel>
+        
+        <DataGrid Grid.Row="2" x:Name="dgGiverUnits" AutoGenerateColumns="False" SelectionMode="Single" Margin="5" 
+                  CanUserAddRows="False" CanUserDeleteRows="False" 
+                  PreviewMouseDown="DgGiverUnits_PreviewMouseDown" SelectionChanged="DgGiverUnits_SelectionChanged">
+            <DataGrid.Resources>
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#87CEEB"/>
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="Black"/>
+                <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#B0E0E6"/>
+            </DataGrid.Resources>
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#87CEEB"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="Sec" Width="50">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" 
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                                     Click="CheckBox_Click"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Birim No" Binding="{Binding Number}" Width="120" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Ad" Binding="{Binding FirstName}" Width="120" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Soyad" Binding="{Binding LastName}" Width="120" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Telefon" Binding="{Binding Phone}" Width="130" IsReadOnly="True"/>
+            </DataGrid.Columns>
+        </DataGrid>
+        
+        <TextBlock Grid.Row="3" x:Name="txtProxyLimitInfo" Text="" FontSize="12" FontWeight="Bold" 
+                   Foreground="Red" Margin="5" TextWrapping="Wrap"/>
+        
+        <TextBlock Grid.Row="4" Text="Vekalet Alan:" FontSize="14" FontWeight="Bold" Margin="5"/>
+        
+        <ComboBox Grid.Row="5" x:Name="cmbReceiver" DisplayMemberPath="DisplayName" 
+                  SelectionChanged="CmbReceiver_SelectionChanged" Margin="5" Height="36"
+                  IsEditable="True" IsTextSearchEnabled="True" TextBoxBase.TextChanged="CmbReceiver_TextChanged"
+                  FontSize="14" Padding="8,6" VerticalContentAlignment="Center"/>
+        
+        <StackPanel Grid.Row="6" x:Name="spOtherName" Visibility="Collapsed" Margin="5">
+            <TextBlock Text="Ad Soyad:" FontSize="14" FontWeight="Bold" Margin="0,5,0,5"/>
+            <TextBox x:Name="txtOtherName" FontSize="14" Height="36" Margin="0,0,0,5" Padding="8,6" VerticalContentAlignment="Center"/>
+            <TextBlock Text="Telefon (Zorunlu):" FontSize="14" FontWeight="Bold" Margin="0,5,0,5"/>
+            <TextBox x:Name="txtOtherPhone" FontSize="14" Height="36" Padding="8,6" VerticalContentAlignment="Center" 
+                     PreviewTextInput="TxtOtherPhone_PreviewTextInput" TextChanged="TxtOtherPhone_TextChanged"/>
+        </StackPanel>
+        
+        <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right" Margin="5">
+            <Button Content="Tamam" x:Name="btnOk" Click="BtnOk_Click" Width="80" Margin="5"/>
+            <Button Content="Iptal" x:Name="btnCancel" Click="BtnCancel_Click" Width="80" Margin="5"/>
+        </StackPanel>
+    </Grid>
+</Window>
+

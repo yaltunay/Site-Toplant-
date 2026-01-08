@@ -1,0 +1,1344 @@
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Input;
+using Toplanti.Data;
+using Toplanti.Dialogs;
+using Toplanti.Infrastructure.Mappings;
+using Toplanti.Models;
+using Toplanti.Models.DTOs;
+using Toplanti.Services.Interfaces;
+using Toplanti.ViewModels.Commands;
+
+namespace Toplanti.ViewModels;
+
+public class MainWindowViewModel : ViewModelBase
+{
+    private readonly INotificationService _notificationService;
+    private readonly ISiteService _siteService;
+    private readonly IMeetingService _meetingService;
+    private readonly IUnitService _unitService;
+    private readonly IDecisionService _decisionService;
+    private readonly IMeetingValidationService _validationService;
+    private readonly IQuorumService _quorumService;
+    private readonly IVotingService _votingService;
+    private readonly IProxyService _proxyService;
+
+    // Properties
+    private ObservableCollection<object> _sites = new();
+    private SiteDto? _selectedSiteDto;
+    private Site? _selectedSite; // Domain model (CreateMeetingDialog için gerekli)
+    private MeetingDto? _currentMeetingDto;
+    private Meeting? _currentMeeting; // Domain model (validation ve işlemler için gerekli)
+    private bool _isDashboardVisible = true;
+    private bool _isDetailsVisible = false;
+    private bool _isNoSiteVisible = true;
+    private int _selectedTabIndex = 0;
+
+    // Dashboard Properties
+    private string _totalUnits = "0";
+    private string _totalMeetings = "0";
+    private string _totalDecisions = "0";
+    private string _totalLandShare = "0.00";
+    private ObservableCollection<MeetingDto> _recentMeetings = new();
+    private ObservableCollection<object> _recentDecisions = new();
+
+    // Units Tab
+    private ObservableCollection<UnitDto> _units = new();
+
+    // Meetings Tab
+    private ObservableCollection<MeetingDto> _meetings = new();
+    private ObservableCollection<MeetingDto> _meetingSelectionList = new();
+    private MeetingDto? _selectedMeetingDto;
+    private Meeting? _selectedMeeting; // Domain model (işlemler için gerekli)
+    private string _meetingStatus = "(Toplanti seciniz)";
+    private string _meetingInfo = "Lütfen bir toplantı seçin.";
+    private string _quorumInfo = "";
+    private ObservableCollection<AgendaItemDto> _agendaItems = new();
+    private ObservableCollection<DocumentDto> _documents = new();
+    private ObservableCollection<DecisionDto> _votingItems = new();
+    private string _agendaTitle = "";
+    private string _documentTitle = "";
+    private string _documentType = "Genel Kurul Icraat Raporu";
+    private string _votingTitle = "";
+    private string _votingDescription = "";
+
+    // Decisions Tab
+    private ObservableCollection<object> _decisions = new();
+    private ObservableCollection<MeetingDto> _votingMeetingList = new();
+    private MeetingDto? _selectedVotingMeetingDto;
+    private Meeting? _selectedVotingMeeting; // Domain model (işlemler için gerekli)
+    private string _votingMeetingStatus = "(Toplanti seciniz)";
+    private string _decisionTitle = "";
+    private string _decisionDescription = "";
+    
+    // Selection properties for DataGrids
+    private MeetingDto? _selectedRecentMeeting;
+    private object? _selectedRecentDecision;
+    private UnitDto? _selectedUnit;
+    private AgendaItemDto? _selectedAgendaItem;
+    private DocumentDto? _selectedDocument;
+    private DecisionDto? _selectedVotingItem;
+    private DecisionDto? _selectedDecision;
+    
+    // Site search text
+    private string _siteSearchText = "";
+    private string _meetingSearchText = "";
+    private string _votingMeetingSearchText = "";
+
+    private readonly IUnitOfWork _unitOfWork;
+
+    public MainWindowViewModel(
+        IUnitOfWork unitOfWork,
+        INotificationService notificationService,
+        ISiteService siteService,
+        IMeetingService meetingService,
+        IUnitService unitService,
+        IDecisionService decisionService,
+        IMeetingValidationService validationService,
+        IQuorumService quorumService,
+        IVotingService votingService,
+        IProxyService proxyService)
+    {
+        _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+        _siteService = siteService ?? throw new ArgumentNullException(nameof(siteService));
+        _meetingService = meetingService ?? throw new ArgumentNullException(nameof(meetingService));
+        _unitService = unitService ?? throw new ArgumentNullException(nameof(unitService));
+        _decisionService = decisionService ?? throw new ArgumentNullException(nameof(decisionService));
+        _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
+        _quorumService = quorumService ?? throw new ArgumentNullException(nameof(quorumService));
+        _votingService = votingService ?? throw new ArgumentNullException(nameof(votingService));
+        _proxyService = proxyService ?? throw new ArgumentNullException(nameof(proxyService));
+
+        InitializeCommands();
+        LoadSitesAsync();
+    }
+
+    #region Properties
+
+    public ObservableCollection<object> Sites
+    {
+        get => _sites;
+        set => SetProperty(ref _sites, value);
+    }
+
+    public object? SelectedSite
+    {
+        get => _selectedSite;
+        set
+        {
+            // Ignore if "Seciniz" string is selected or null
+            if (value == null || value is string)
+            {
+                if (_selectedSite != null)
+                {
+                    _selectedSite = null;
+                    OnPropertyChanged(nameof(SelectedSite));
+                    OnSiteSelectionChanged();
+                }
+                return;
+            }
+
+            if (value is SiteDto siteDto)
+            {
+                _selectedSiteDto = siteDto;
+                // Domain model'i de yükle (CreateMeetingDialog için gerekli)
+                LoadSiteDomainModelAsync(siteDto.Id);
+            }
+            else if (value is Site site && SetProperty(ref _selectedSite, site))
+            {
+                OnSiteSelectionChanged();
+            }
+        }
+    }
+    
+    private async void LoadSiteDomainModelAsync(int siteId)
+    {
+        try
+        {
+            _selectedSite = await _siteService.GetSiteDomainModelByIdAsync(siteId);
+            OnSiteSelectionChanged();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Site yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    public Meeting? CurrentMeeting
+    {
+        get => _currentMeeting;
+        set
+        {
+            if (SetProperty(ref _currentMeeting, value))
+            {
+                OnCurrentMeetingChanged();
+            }
+        }
+    }
+
+    public bool IsDashboardVisible
+    {
+        get => _isDashboardVisible;
+        set => SetProperty(ref _isDashboardVisible, value);
+    }
+
+    public bool IsDetailsVisible
+    {
+        get => _isDetailsVisible;
+        set => SetProperty(ref _isDetailsVisible, value);
+    }
+
+    public bool IsNoSiteVisible
+    {
+        get => _isNoSiteVisible;
+        set => SetProperty(ref _isNoSiteVisible, value);
+    }
+
+    public int SelectedTabIndex
+    {
+        get => _selectedTabIndex;
+        set => SetProperty(ref _selectedTabIndex, value);
+    }
+
+    // Dashboard Properties
+    public string TotalUnits
+    {
+        get => _totalUnits;
+        set => SetProperty(ref _totalUnits, value);
+    }
+
+    public string TotalMeetings
+    {
+        get => _totalMeetings;
+        set => SetProperty(ref _totalMeetings, value);
+    }
+
+    public string TotalDecisions
+    {
+        get => _totalDecisions;
+        set => SetProperty(ref _totalDecisions, value);
+    }
+
+    public string TotalLandShare
+    {
+        get => _totalLandShare;
+        set => SetProperty(ref _totalLandShare, value);
+    }
+
+    public ObservableCollection<MeetingDto> RecentMeetings
+    {
+        get => _recentMeetings;
+        set => SetProperty(ref _recentMeetings, value);
+    }
+
+    public ObservableCollection<object> RecentDecisions
+    {
+        get => _recentDecisions;
+        set => SetProperty(ref _recentDecisions, value);
+    }
+
+    // Units Tab
+    public ObservableCollection<UnitDto> Units
+    {
+        get => _units;
+        set => SetProperty(ref _units, value);
+    }
+
+    // Meetings Tab
+    public ObservableCollection<MeetingDto> Meetings
+    {
+        get => _meetings;
+        set => SetProperty(ref _meetings, value);
+    }
+
+    public ObservableCollection<MeetingDto> MeetingSelectionList
+    {
+        get => _meetingSelectionList;
+        set => SetProperty(ref _meetingSelectionList, value);
+    }
+
+    public MeetingDto? SelectedMeeting
+    {
+        get => _selectedMeetingDto;
+        set
+        {
+            // Ignore if null or not a MeetingDto
+            if (value == null)
+            {
+                if (_selectedMeetingDto != null)
+                {
+                    _selectedMeetingDto = null;
+                    _selectedMeeting = null;
+                    CurrentMeeting = null;
+                }
+                return;
+            }
+
+            if (SetProperty(ref _selectedMeetingDto, value))
+            {
+                // Domain model'i de yükle (işlemler için gerekli)
+                LoadMeetingDomainModelAsync(value.Id);
+            }
+        }
+    }
+    
+    private async void LoadMeetingDomainModelAsync(int meetingId)
+    {
+        try
+        {
+            _selectedMeeting = await _meetingService.GetMeetingDomainModelByIdAsync(meetingId);
+            CurrentMeeting = _selectedMeeting;
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Toplanti yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    public string MeetingStatus
+    {
+        get => _meetingStatus;
+        set => SetProperty(ref _meetingStatus, value);
+    }
+
+    public string MeetingInfo
+    {
+        get => _meetingInfo;
+        set => SetProperty(ref _meetingInfo, value);
+    }
+
+    public string QuorumInfo
+    {
+        get => _quorumInfo;
+        set => SetProperty(ref _quorumInfo, value);
+    }
+
+    public ObservableCollection<AgendaItemDto> AgendaItems
+    {
+        get => _agendaItems;
+        set => SetProperty(ref _agendaItems, value);
+    }
+
+    public ObservableCollection<DocumentDto> Documents
+    {
+        get => _documents;
+        set => SetProperty(ref _documents, value);
+    }
+
+    public ObservableCollection<DecisionDto> VotingItems
+    {
+        get => _votingItems;
+        set => SetProperty(ref _votingItems, value);
+    }
+
+    public string AgendaTitle
+    {
+        get => _agendaTitle;
+        set => SetProperty(ref _agendaTitle, value);
+    }
+
+    public string DocumentTitle
+    {
+        get => _documentTitle;
+        set => SetProperty(ref _documentTitle, value);
+    }
+
+    public string DocumentType
+    {
+        get => _documentType;
+        set => SetProperty(ref _documentType, value);
+    }
+
+    public string VotingTitle
+    {
+        get => _votingTitle;
+        set => SetProperty(ref _votingTitle, value);
+    }
+
+    public string VotingDescription
+    {
+        get => _votingDescription;
+        set => SetProperty(ref _votingDescription, value);
+    }
+
+    // Decisions Tab
+    public ObservableCollection<object> Decisions
+    {
+        get => _decisions;
+        set => SetProperty(ref _decisions, value);
+    }
+
+    public ObservableCollection<MeetingDto> VotingMeetingList
+    {
+        get => _votingMeetingList;
+        set => SetProperty(ref _votingMeetingList, value);
+    }
+
+    public MeetingDto? SelectedVotingMeeting
+    {
+        get => _selectedVotingMeetingDto;
+        set
+        {
+            // Ignore if null or not a MeetingDto
+            if (value == null)
+            {
+                if (_selectedVotingMeetingDto != null)
+                {
+                    _selectedVotingMeetingDto = null;
+                    _selectedVotingMeeting = null;
+                    CurrentMeeting = null;
+                }
+                return;
+            }
+
+            if (SetProperty(ref _selectedVotingMeetingDto, value))
+            {
+                // Domain model'i de yükle (işlemler için gerekli)
+                LoadVotingMeetingDomainModelAsync(value.Id);
+            }
+        }
+    }
+    
+    private async void LoadVotingMeetingDomainModelAsync(int meetingId)
+    {
+        try
+        {
+            _selectedVotingMeeting = await _meetingService.GetMeetingDomainModelByIdAsync(meetingId);
+            CurrentMeeting = _selectedVotingMeeting;
+            LoadDecisionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Toplanti yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    public string VotingMeetingStatus
+    {
+        get => _votingMeetingStatus;
+        set => SetProperty(ref _votingMeetingStatus, value);
+    }
+
+    public string DecisionTitle
+    {
+        get => _decisionTitle;
+        set => SetProperty(ref _decisionTitle, value);
+    }
+
+    public string DecisionDescription
+    {
+        get => _decisionDescription;
+        set => SetProperty(ref _decisionDescription, value);
+    }
+
+    // Selection Properties
+    public MeetingDto? SelectedRecentMeeting
+    {
+        get => _selectedRecentMeeting;
+        set
+        {
+            if (SetProperty(ref _selectedRecentMeeting, value) && value != null)
+            {
+                // Fire and forget async operation from property setter
+                _ = ShowMeetingsAsync(value);
+            }
+        }
+    }
+
+    public object? SelectedRecentDecision
+    {
+        get => _selectedRecentDecision;
+        set
+        {
+            if (SetProperty(ref _selectedRecentDecision, value) && value != null)
+            {
+                ShowDecisions();
+            }
+        }
+    }
+
+    public UnitDto? SelectedUnit
+    {
+        get => _selectedUnit;
+        set => SetProperty(ref _selectedUnit, value);
+    }
+
+    public AgendaItemDto? SelectedAgendaItem
+    {
+        get => _selectedAgendaItem;
+        set => SetProperty(ref _selectedAgendaItem, value);
+    }
+
+    public DocumentDto? SelectedDocument
+    {
+        get => _selectedDocument;
+        set => SetProperty(ref _selectedDocument, value);
+    }
+
+    public DecisionDto? SelectedVotingItem
+    {
+        get => _selectedVotingItem;
+        set => SetProperty(ref _selectedVotingItem, value);
+    }
+
+    public DecisionDto? SelectedDecision
+    {
+        get => _selectedDecision;
+        set => SetProperty(ref _selectedDecision, value);
+    }
+
+    public string SiteSearchText
+    {
+        get => _siteSearchText;
+        set
+        {
+            if (SetProperty(ref _siteSearchText, value))
+            {
+                FilterSites();
+            }
+        }
+    }
+
+    public string MeetingSearchText
+    {
+        get => _meetingSearchText;
+        set
+        {
+            if (SetProperty(ref _meetingSearchText, value))
+            {
+                FilterMeetings();
+            }
+        }
+    }
+
+    public string VotingMeetingSearchText
+    {
+        get => _votingMeetingSearchText;
+        set
+        {
+            if (SetProperty(ref _votingMeetingSearchText, value))
+            {
+                FilterVotingMeetings();
+            }
+        }
+    }
+
+    #endregion
+
+    #region Commands
+
+    public ICommand CreateMeetingCommand { get; private set; } = null!;
+    public ICommand AddAttendanceCommand { get; private set; } = null!;
+    public ICommand AddProxyCommand { get; private set; } = null!;
+    public ICommand CheckQuorumCommand { get; private set; } = null!;
+    public ICommand CompleteMeetingCommand { get; private set; } = null!;
+    public ICommand GenerateMinutesCommand { get; private set; } = null!;
+    public ICommand CreateDecisionCommand { get; private set; } = null!;
+    public ICommand AddAgendaCommand { get; private set; } = null!;
+    public ICommand AddDocumentCommand { get; private set; } = null!;
+    public ICommand AddVotingCommand { get; private set; } = null!;
+    public ICommand BackToDashboardCommand { get; private set; } = null!;
+    public ICommand ShowUnitsCommand { get; private set; } = null!;
+    public ICommand ShowMeetingsCommand { get; private set; } = null!;
+    public ICommand ShowDecisionsCommand { get; private set; } = null!;
+    public ICommand BlockManagementCommand { get; private set; } = null!;
+    public ICommand DeleteUnitCommand { get; private set; } = null!;
+    public ICommand VoteCommand { get; private set; } = null!;
+    public ICommand DecisionDetailCommand { get; private set; } = null!;
+    public ICommand AboutCommand { get; private set; } = null!;
+    public ICommand MoveAgendaUpCommand { get; private set; } = null!;
+    public ICommand MoveAgendaDownCommand { get; private set; } = null!;
+    public ICommand DeleteAgendaCommand { get; private set; } = null!;
+    public ICommand DeleteDocumentCommand { get; private set; } = null!;
+    public ICommand DeleteVotingCommand { get; private set; } = null!;
+    public ICommand HiddenDeleteCommand { get; private set; } = null!;
+
+    private void InitializeCommands()
+    {
+        CreateMeetingCommand = new RelayCommand(async _ => await CreateMeetingAsync());
+        AddAttendanceCommand = new RelayCommand(async _ => await AddAttendanceAsync());
+        AddProxyCommand = new RelayCommand(async _ => await AddProxyAsync());
+        CheckQuorumCommand = new RelayCommand(async _ => await CheckQuorumAsync());
+        CompleteMeetingCommand = new RelayCommand(async _ => await CompleteMeetingAsync());
+        GenerateMinutesCommand = new RelayCommand(async _ => await GenerateMinutesAsync());
+        CreateDecisionCommand = new RelayCommand(async _ => await CreateDecisionAsync());
+        AddAgendaCommand = new RelayCommand(async _ => await AddAgendaAsync());
+        AddDocumentCommand = new RelayCommand(async _ => await AddDocumentAsync());
+        AddVotingCommand = new RelayCommand(async _ => await AddVotingAsync());
+        BackToDashboardCommand = new RelayCommand(_ => ShowDashboard());
+        ShowUnitsCommand = new RelayCommand(_ => ShowUnits());
+        ShowMeetingsCommand = new RelayCommand(_ => ShowMeetings());
+        ShowDecisionsCommand = new RelayCommand(_ => ShowDecisions());
+        BlockManagementCommand = new RelayCommand(_ => OpenBlockManagement());
+        DeleteUnitCommand = new RelayCommand<int>(async id => await DeleteUnitAsync(id));
+        VoteCommand = new RelayCommand<int>(async id => await VoteAsync(id));
+        DecisionDetailCommand = new RelayCommand<int>(id => ShowDecisionDetail(id));
+        AboutCommand = new RelayCommand(_ => ShowAbout());
+        MoveAgendaUpCommand = new RelayCommand<AgendaItemDto>(async item => await MoveAgendaUpAsync(item));
+        MoveAgendaDownCommand = new RelayCommand<AgendaItemDto>(async item => await MoveAgendaDownAsync(item));
+        DeleteAgendaCommand = new RelayCommand<AgendaItemDto>(async item => await DeleteAgendaAsync(item));
+        DeleteDocumentCommand = new RelayCommand<DocumentDto>(async doc => await DeleteDocumentAsync(doc));
+        DeleteVotingCommand = new RelayCommand<DecisionDto>(async decision => await DeleteVotingAsync(decision));
+        HiddenDeleteCommand = new RelayCommand(_ => HandleHiddenDelete());
+    }
+
+    #endregion
+
+    #region Private Methods
+
+    private async void LoadSitesAsync()
+    {
+        try
+        {
+            var sites = await _siteService.GetAllSitesAsync();
+            var siteList = new List<object> { "Seciniz" };
+            siteList.AddRange(sites);
+            Sites = new ObservableCollection<object>(siteList);
+            
+            // SelectedSite domain model'ini de güncelle (CreateMeetingDialog için)
+            if (_selectedSiteDto != null)
+            {
+                _selectedSite = await _siteService.GetSiteDomainModelByIdAsync(_selectedSiteDto.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Site yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async void OnSiteSelectionChanged()
+    {
+        if (SelectedSite == null)
+        {
+            IsNoSiteVisible = true;
+            IsDashboardVisible = false;
+            IsDetailsVisible = false;
+            return;
+        }
+
+        IsNoSiteVisible = false;
+        IsDashboardVisible = true;
+        IsDetailsVisible = false;
+
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        if (_selectedSiteDto == null) return;
+
+        try
+        {
+            var stats = await _meetingService.GetDashboardStatsAsync(_selectedSiteDto.Id);
+            TotalUnits = stats.TotalUnits.ToString();
+            TotalMeetings = stats.TotalMeetings.ToString();
+            TotalDecisions = stats.TotalDecisions.ToString();
+            TotalLandShare = stats.TotalLandShare.ToString("F2");
+
+            var meetings = await _meetingService.GetMeetingsBySiteIdAsync(_selectedSiteDto.Id);
+            RecentMeetings = new ObservableCollection<MeetingDto>(meetings.Take(5));
+
+            // Recent decisions loading logic would go here
+            // This is simplified for now
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError("Dashboard yukleme hatasi", "Hata", ex);
+        }
+    }
+
+    private async void OnCurrentMeetingChanged()
+    {
+        if (CurrentMeeting == null)
+        {
+            MeetingInfo = "Lütfen bir toplantı seçin.";
+            QuorumInfo = "";
+            return;
+        }
+
+        await LoadMeetingDetailsAsync();
+    }
+
+    private async Task LoadMeetingDetailsAsync()
+    {
+        if (CurrentMeeting == null) return;
+
+        try
+        {
+            var meetingDto = await _meetingService.GetMeetingByIdAsync(CurrentMeeting.Id);
+            if (meetingDto == null) return;
+
+            // Domain model'i yükle (işlemler için gerekli)
+            CurrentMeeting = await _meetingService.GetMeetingDomainModelByIdAsync(meetingDto.Id);
+            if (CurrentMeeting == null) return;
+
+            MeetingStatus = meetingDto.IsCompleted ? "(Tamamlanmis)" : "";
+            UpdateMeetingInfo();
+            await LoadAgendaItemsAsync();
+            await LoadDocumentsAsync();
+            await LoadVotingItemsAsync();
+            await LoadDecisionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError("Toplanti detay yukleme hatasi", "Hata", ex);
+        }
+    }
+
+    private void UpdateMeetingInfo()
+    {
+        if (CurrentMeeting == null) return;
+
+        var attendedUnits = CurrentMeeting.Attendances
+            .Where(a => a.Unit != null)
+            .Select(a => a.Unit!)
+            .ToList();
+
+        var attendedLandShare = attendedUnits.Sum(u => u.LandShare);
+        var attendedCount = attendedUnits.Count;
+
+        MeetingInfo = $"Toplantı: {CurrentMeeting.Title}\n" +
+                     $"Tarih: {CurrentMeeting.MeetingDate:dd.MM.yyyy HH:mm}\n" +
+                     $"Toplam Birim: {CurrentMeeting.TotalUnitCount}\n" +
+                     $"Katılan Birim: {attendedCount}\n" +
+                     $"Toplam Arsa Payı: {CurrentMeeting.TotalSiteLandShare:F2}\n" +
+                     $"Katılan Arsa Payı: {attendedLandShare:F2}";
+
+        var (achieved, message) = _quorumService.CheckQuorum(
+            CurrentMeeting.TotalUnitCount,
+            attendedCount,
+            CurrentMeeting.TotalSiteLandShare,
+            attendedLandShare);
+
+        QuorumInfo = message;
+    }
+
+    private async Task LoadAgendaItemsAsync()
+    {
+        if (CurrentMeeting == null) return;
+
+        try
+        {
+            var items = await _unitOfWork.AgendaItems.GetAgendaItemsByMeetingIdAsync(CurrentMeeting.Id);
+            var itemDtos = EntityMapper.ToDto(items);
+            AgendaItems = new ObservableCollection<AgendaItemDto>(itemDtos);
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Gundem yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task LoadDocumentsAsync()
+    {
+        if (CurrentMeeting == null) return;
+
+        try
+        {
+            var documents = await _unitOfWork.Documents.GetDocumentsByMeetingIdAsync(CurrentMeeting.Id);
+            var documentDtos = EntityMapper.ToDto(documents);
+            Documents = new ObservableCollection<DocumentDto>(documentDtos);
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Belge yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task LoadVotingItemsAsync()
+    {
+        if (CurrentMeeting == null) return;
+
+        try
+        {
+            var decisions = await _decisionService.GetDecisionsByMeetingIdAsync(CurrentMeeting.Id);
+            VotingItems = new ObservableCollection<DecisionDto>(decisions);
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Oylama yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task LoadDecisionsAsync()
+    {
+        if (CurrentMeeting == null) return;
+
+        try
+        {
+            var decisions = await _decisionService.GetDecisionsByMeetingIdAsync(CurrentMeeting.Id);
+            Decisions = new ObservableCollection<object>(decisions);
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Karar yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task LoadMeetingsAsync()
+    {
+        if (_selectedSiteDto == null) return;
+
+        try
+        {
+            var meetings = await _meetingService.GetMeetingsBySiteIdAsync(_selectedSiteDto.Id);
+            Meetings = new ObservableCollection<MeetingDto>(meetings);
+            MeetingSelectionList = new ObservableCollection<MeetingDto>(meetings);
+            VotingMeetingList = new ObservableCollection<MeetingDto>(meetings);
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Toplanti yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task LoadUnitsAsync()
+    {
+        if (_selectedSiteDto == null) return;
+
+        try
+        {
+            var units = await _unitService.GetUnitsBySiteIdAsync(_selectedSiteDto.Id);
+            Units = new ObservableCollection<UnitDto>(units);
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Birim yukleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    #endregion
+
+    #region Command Implementations
+
+    private async Task CreateMeetingAsync()
+    {
+        if (SelectedSite == null)
+        {
+            _notificationService.ShowWarning("Lutfen once bir site secin.");
+            return;
+        }
+
+        try
+        {
+            var dialog = new CreateMeetingDialog(_meetingService, _selectedSite);
+            if (dialog.ShowDialog() == true && dialog.CreatedMeeting != null)
+            {
+                await LoadMeetingsAsync();
+                // DTO'dan domain model'e dönüşüm
+                CurrentMeeting = await _meetingService.GetMeetingDomainModelByIdAsync(dialog.CreatedMeeting.Id);
+                if (CurrentMeeting != null)
+                {
+                    // SelectedMeeting DTO'sunu da güncelle
+                    var meetingDto = await _meetingService.GetMeetingByIdAsync(CurrentMeeting.Id);
+                    if (meetingDto != null)
+                    {
+                        SelectedMeeting = meetingDto;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Toplanti olusturma hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task AddAttendanceAsync()
+    {
+        // Implementation will be added
+        await Task.CompletedTask;
+    }
+
+    private async Task AddProxyAsync()
+    {
+        // Implementation will be added
+        await Task.CompletedTask;
+    }
+
+    private async Task CheckQuorumAsync()
+    {
+        if (CurrentMeeting == null)
+        {
+            _notificationService.ShowWarning("Lütfen önce bir toplantı seçin.");
+            return;
+        }
+
+        try
+        {
+            var result = await _meetingService.CheckQuorumAsync(CurrentMeeting.Id);
+            UpdateMeetingInfo();
+
+            if (result.Achieved)
+                _notificationService.ShowInfo(result.Message, "Yeter Sayı Sağlandı");
+            else
+                _notificationService.ShowWarning(result.Message, "Yeter Sayı Sağlanamadı");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError("Yeter sayi kontrolu hatasi", "Hata", ex);
+        }
+    }
+
+    private async Task CompleteMeetingAsync()
+    {
+        if (CurrentMeeting == null)
+        {
+            _notificationService.ShowWarning("Lutfen once bir toplanti secin.");
+            return;
+        }
+
+        var validation = _validationService.ValidateMeetingHasDecisions(CurrentMeeting);
+        if (!validation.IsValid)
+        {
+            _notificationService.ShowWarning(validation.ErrorMessage!, "Karar Gerekli");
+            return;
+        }
+
+        var result = _notificationService.ShowConfirmation(
+            "Bu toplantiyi tamamlamak istediginizden emin misiniz?\n\n" +
+            "Toplanti tamamlandiktan sonra:\n" +
+            "- Yeni katilim eklenemez\n" +
+            "- Yeni vekalet eklenemez\n" +
+            "- Yeni karar/oylama eklenemez\n" +
+            "- Mevcut oylamalara oy kullanilamaz\n" +
+            "- Toplanti bilgileri duzenlenemez\n\n" +
+            "Devam etmek istiyor musunuz?",
+            "Toplantiyi Tamamla");
+
+        if (result == MessageBoxResult.Yes)
+        {
+            try
+            {
+                await _meetingService.CompleteMeetingAsync(CurrentMeeting.Id);
+                await LoadMeetingsAsync();
+                UpdateMeetingInfo();
+                _notificationService.ShowSuccess("Toplanti basariyla tamamlandi.");
+            }
+            catch (Exception ex)
+            {
+                _notificationService.ShowError($"Toplanti tamamlama hatasi: {ex.Message}", "Hata", ex);
+            }
+        }
+    }
+
+    private async Task GenerateMinutesAsync()
+    {
+        if (CurrentMeeting == null)
+        {
+            _notificationService.ShowWarning("Lütfen önce bir toplantı seçin.");
+            return;
+        }
+
+        try
+        {
+            var minutes = await _meetingService.GenerateMeetingMinutesAsync(CurrentMeeting.Id);
+            var window = new MinutesWindow(minutes);
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError("Tutanak olusturma hatasi", "Hata", ex);
+        }
+    }
+
+    private async Task CreateDecisionAsync()
+    {
+        if (CurrentMeeting == null)
+        {
+            _notificationService.ShowWarning("Lutfen once bir toplanti secin.");
+            return;
+        }
+
+        var validation = _validationService.ValidateMeetingAndContext(CurrentMeeting);
+        if (!validation.IsValid)
+        {
+            _notificationService.ShowWarning(validation.ErrorMessage!);
+            return;
+        }
+
+        var completedValidation = _validationService.ValidateMeetingNotCompleted(CurrentMeeting, "Yeni karar eklenemez");
+        if (!completedValidation.IsValid)
+        {
+            _notificationService.ShowWarning(completedValidation.ErrorMessage!);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(DecisionTitle) || string.IsNullOrWhiteSpace(DecisionDescription))
+        {
+            _notificationService.ShowWarning("Lutfen tum alanlari doldurun.");
+            return;
+        }
+
+        try
+        {
+            await _decisionService.CreateDecisionAsync(CurrentMeeting.Id, DecisionTitle, DecisionDescription);
+            DecisionTitle = "";
+            DecisionDescription = "";
+            await LoadDecisionsAsync();
+            _notificationService.ShowSuccess("Karar başarıyla oluşturuldu.", "Başarılı");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Karar olusturma hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task AddAgendaAsync()
+    {
+        if (CurrentMeeting == null || string.IsNullOrWhiteSpace(AgendaTitle))
+        {
+            _notificationService.ShowWarning("Lutfen gundem basligini girin.");
+            return;
+        }
+
+        try
+        {
+            var maxOrder = AgendaItems.Any() ? AgendaItems.Max(a => a.Order) : 0;
+            var agendaItem = new AgendaItem
+            {
+                MeetingId = CurrentMeeting.Id,
+                Title = AgendaTitle.Trim(),
+                Description = null,
+                Order = maxOrder + 1
+            };
+
+            await _unitOfWork.AgendaItems.AddAsync(agendaItem);
+            await _unitOfWork.SaveChangesAsync();
+
+            AgendaTitle = "";
+            await LoadAgendaItemsAsync();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Gundem ekleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task AddDocumentAsync()
+    {
+        if (CurrentMeeting == null || string.IsNullOrWhiteSpace(DocumentTitle))
+        {
+            _notificationService.ShowWarning("Lutfen belge basligini girin.");
+            return;
+        }
+
+        try
+        {
+            var document = new Document
+            {
+                MeetingId = CurrentMeeting.Id,
+                Title = DocumentTitle.Trim(),
+                DocumentType = DocumentType ?? "Genel Kurul Icraat Raporu",
+                CreatedAt = DateTime.Now
+            };
+
+            await _unitOfWork.Documents.AddAsync(document);
+            await _unitOfWork.SaveChangesAsync();
+
+            DocumentTitle = "";
+            await LoadDocumentsAsync();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Belge ekleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task AddVotingAsync()
+    {
+        if (CurrentMeeting == null || string.IsNullOrWhiteSpace(VotingTitle))
+        {
+            _notificationService.ShowWarning("Lutfen oylama basligini girin.");
+            return;
+        }
+
+        try
+        {
+            await _decisionService.CreateDecisionAsync(CurrentMeeting.Id, VotingTitle, VotingDescription ?? "");
+            VotingTitle = "";
+            VotingDescription = "";
+            await LoadVotingItemsAsync();
+            await LoadDecisionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Oylama ekleme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private void ShowDashboard()
+    {
+        IsDashboardVisible = true;
+        IsDetailsVisible = false;
+        LoadDashboardAsync();
+    }
+
+    private void ShowUnits()
+    {
+        IsDashboardVisible = false;
+        IsDetailsVisible = true;
+        SelectedTabIndex = 0; // Units tab index
+        LoadUnitsAsync();
+    }
+
+    private async Task ShowMeetingsAsync(MeetingDto? meetingToSelect = null)
+    {
+        IsDashboardVisible = false;
+        IsDetailsVisible = true;
+        SelectedTabIndex = 1; // Meetings tab index (0=Units, 1=Meetings, 2=Decisions)
+        await LoadMeetingsAsync();
+        
+        // After loading meetings, select the specified meeting if provided
+        if (meetingToSelect != null)
+        {
+            // Find the meeting in the loaded list by ID
+            var meeting = MeetingSelectionList.FirstOrDefault(m => m.Id == meetingToSelect.Id);
+            if (meeting != null)
+            {
+                SelectedMeeting = meeting;
+            }
+        }
+    }
+
+    private void ShowMeetings()
+    {
+        ShowMeetingsAsync();
+    }
+
+    private void ShowDecisions()
+    {
+        IsDashboardVisible = false;
+        IsDetailsVisible = true;
+        SelectedTabIndex = 2; // Decisions tab index
+        LoadDecisionsAsync();
+    }
+
+    private void OpenBlockManagement()
+    {
+        if (_selectedSite == null)
+        {
+            _notificationService.ShowWarning("Lutfen once bir site secin.");
+            return;
+        }
+
+        try
+        {
+            var window = new BlockUnitManagementWindow(_unitOfWork, _siteService, _unitService, _selectedSite);
+            window.ShowDialog();
+            LoadDashboardAsync();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Blok ve daire yonetimi acilirken hata: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task DeleteUnitAsync(int unitId)
+    {
+        var result = _notificationService.ShowConfirmation("Bu birimi silmek istediğinizden emin misiniz?", "Onay");
+        if (result == MessageBoxResult.Yes)
+        {
+            try
+            {
+                await _unitService.DeleteUnitAsync(unitId);
+                await LoadUnitsAsync();
+            }
+            catch (Exception ex)
+            {
+                _notificationService.ShowError($"Birim silme hatasi: {ex.Message}", "Hata", ex);
+            }
+        }
+    }
+
+    private async Task VoteAsync(int decisionId)
+    {
+        // Implementation will be added
+        await Task.CompletedTask;
+    }
+
+    private async void ShowDecisionDetail(int decisionId)
+    {
+        try
+        {
+            var decision = await _decisionService.GetDecisionDomainModelByIdAsync(decisionId);
+            
+            if (decision != null)
+            {
+                var window = new DecisionDetailWindow(decision);
+                window.ShowDialog();
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Karar detay gosterim hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private void ShowAbout()
+    {
+        var aboutDialog = new AboutDialog();
+        aboutDialog.ShowDialog();
+    }
+
+    private async Task MoveAgendaUpAsync(AgendaItemDto? item)
+    {
+        if (item == null || CurrentMeeting == null) return;
+
+        try
+        {
+            var currentOrder = item.Order;
+            if (currentOrder <= 1) return;
+
+            var previousItem = AgendaItems.FirstOrDefault(a => a.Order == currentOrder - 1);
+            if (previousItem == null) return;
+
+            // Domain model'leri yükle ve güncelle
+            var itemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(item.Id);
+            var previousItemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(previousItem.Id);
+            
+            if (itemEntity != null && previousItemEntity != null)
+            {
+                itemEntity.Order = currentOrder - 1;
+                previousItemEntity.Order = currentOrder;
+
+                _unitOfWork.AgendaItems.Update(itemEntity);
+                _unitOfWork.AgendaItems.Update(previousItemEntity);
+                await _unitOfWork.SaveChangesAsync();
+                await LoadAgendaItemsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Gundem tasima hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task MoveAgendaDownAsync(AgendaItemDto? item)
+    {
+        if (item == null || CurrentMeeting == null) return;
+
+        try
+        {
+            var currentOrder = item.Order;
+            var maxOrder = AgendaItems.Max(a => a.Order);
+            if (currentOrder >= maxOrder) return;
+
+            var nextItem = AgendaItems.FirstOrDefault(a => a.Order == currentOrder + 1);
+            if (nextItem == null) return;
+
+            // Domain model'leri yükle ve güncelle
+            var itemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(item.Id);
+            var nextItemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(nextItem.Id);
+            
+            if (itemEntity != null && nextItemEntity != null)
+            {
+                itemEntity.Order = currentOrder + 1;
+                nextItemEntity.Order = currentOrder;
+
+                _unitOfWork.AgendaItems.Update(itemEntity);
+                _unitOfWork.AgendaItems.Update(nextItemEntity);
+                await _unitOfWork.SaveChangesAsync();
+                await LoadAgendaItemsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Gundem tasima hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task DeleteAgendaAsync(AgendaItemDto? item)
+    {
+        if (item == null || CurrentMeeting == null) return;
+
+        var result = _notificationService.ShowConfirmation("Bu gundem maddesini silmek istediğinizden emin misiniz?", "Onay");
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            var itemEntity = await _unitOfWork.AgendaItems.GetByIdAsync(item.Id);
+            if (itemEntity != null)
+            {
+                _unitOfWork.AgendaItems.Remove(itemEntity);
+                await _unitOfWork.SaveChangesAsync();
+                await LoadAgendaItemsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Gundem silme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task DeleteDocumentAsync(DocumentDto? doc)
+    {
+        if (doc == null || CurrentMeeting == null) return;
+
+        var result = _notificationService.ShowConfirmation("Bu belgeyi silmek istediğinizden emin misiniz?", "Onay");
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            var docEntity = await _unitOfWork.Documents.GetByIdAsync(doc.Id);
+            if (docEntity != null)
+            {
+                _unitOfWork.Documents.Remove(docEntity);
+                await _unitOfWork.SaveChangesAsync();
+                await LoadDocumentsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Belge silme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private async Task DeleteVotingAsync(DecisionDto? decision)
+    {
+        if (decision == null || CurrentMeeting == null) return;
+
+        var result = _notificationService.ShowConfirmation("Bu oylama maddesini silmek istediğinizden emin misiniz?", "Onay");
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            await _decisionService.DeleteDecisionAsync(decision.Id);
+            await LoadVotingItemsAsync();
+            await LoadDecisionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Oylama silme hatasi: {ex.Message}", "Hata", ex);
+        }
+    }
+
+    private void HandleHiddenDelete()
+    {
+        // Hidden delete functionality - can be implemented if needed
+        // This is a special button for administrative purposes
+    }
+
+    private void FilterSites()
+    {
+        // Site filtering logic can be implemented here if needed
+        // For now, we'll rely on ComboBox's built-in filtering
+    }
+
+    private void FilterMeetings()
+    {
+        // Meeting filtering logic can be implemented here if needed
+        // For now, we'll rely on ComboBox's built-in filtering
+    }
+
+    private void FilterVotingMeetings()
+    {
+        // Voting meeting filtering logic can be implemented here if needed
+        // For now, we'll rely on ComboBox's built-in filtering
+    }
+
+    #endregion
+}
+
